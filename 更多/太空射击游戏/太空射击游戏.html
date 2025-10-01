@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太空射击游戏</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            color: #0ff;
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            background: rgba(0, 20, 30, 0.8);
+            width: 800px;
+        }
+        #header {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 20, 30, 0.9);
+            text-align: center;
+            border-bottom: 2px solid #0ff;
+        }
+        h1 {
+            margin: 5px 0;
+            text-shadow: 0 0 10px #0ff;
+            letter-spacing: 2px;
+            font-size: 32px;
+        }
+        #instructions {
+            background: rgba(0, 30, 40, 0.9);
+            padding: 15px;
+            width: 100%;
+            text-align: center;
+            border-top: 2px solid #0ff;
+        }
+        .btn {
+            background: linear-gradient(to bottom, #0088cc, #0044aa);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin: 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0, 200, 255, 0.7);
+        }
+        .btn:hover {
+            background: linear-gradient(to bottom, #00aaff, #0066cc);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #0ff;
+        }
+        #canvasContainer {
+            position: relative;
+        }
+        canvas {
+            display: block;
+            border: 2px solid #0ff;
+            border-radius: 8px;
+        }
+        .score-display {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="header">
+            <h1>🚀 太空射击游戏 🌠</h1>
+            <p>使用 ← → 移动飞船，空格键射击 | 躲避陨石，击败敌人！</p>
+        </div>
+        <div id="canvasContainer">
+            <div class="score-display">分数: <span id="score">0</span></div>
+            <!-- p5画布将在这里生成 -->
+        </div>
+        <div id="instructions">
+            <button class="btn" onclick="toggleMusic()">播放/暂停音乐</button>
+            <button class="btn" onclick="restartGame()">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        // 游戏变量
+        let player;
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let stars = [];
+        let score = 0;
+        let gameState = "playing"; // playing, gameOver
+        let bgMusic;
+        let shootSound;
+        let explosionSound;
+        let osc; // 用于生成音效的振荡器
+        
+        // 生成射击音效
+        function createShootSound() {
+            // 创建并返回一个音效
+            let env = new p5.Envelope();
+            env.setADSR(0.01, 0.1, 0.2, 0.1);
+            env.setRange(0.7, 0);
+            
+            let osc = new p5.Oscillator('sawtooth');
+            osc.freq(400);
+            osc.amp(env);
+            osc.start();
+            env.play(osc);
+            
+            return osc;
+        }
+        
+        // 生成爆炸音效
+        function createExplosionSound() {
+            let env = new p5.Envelope();
+            env.setADSR(0.01, 0.2, 0.1, 0.3);
+            env.setRange(0.8, 0);
+            
+            let osc = new p5.Oscillator('square');
+            osc.freq(150);
+            osc.amp(env);
+            osc.start();
+            env.play(osc);
+            
+            return osc;
+        }
+        
+        // 生成背景音乐
+        function createBackgroundMusic() {
+            let music = new p5.Part();
+            let notes = [60, 62, 64, 65, 67, 69, 71, 72]; // C大调音阶
+            let currentNote = 0;
+            
+            music.addPhrase('melody', () => {
+                let midiNote = notes[currentNote];
+                let freq = midiToFreq(midiNote);
+                let osc = new p5.Oscillator('sine');
+                osc.freq(freq);
+                osc.amp(0.3);
+                osc.start();
+                osc.amp(0, 0.5);
+                
+                currentNote = (currentNote + 1) % notes.length;
+            }, 0.5);
+            
+            music.setBPM(120);
+            music.loop();
+            return music;
+        }
+
+        function setup() {
+            let canvas = createCanvas(800, 600);
+            canvas.parent('canvasContainer');
+            
+            // 初始化玩家
+            player = {
+                x: width / 2,
+                y: height - 100,
+                size: 30,
+                speed: 5,
+                color: [0, 200, 255],
+                isMovingLeft: false,
+                isMovingRight: false
+            };
+            
+            // 创建星空背景
+            for (let i = 0; i < 150; i++) {
+                stars.push({
+                    x: random(width),
+                    y: random(height),
+                    size: random(1, 3),
+                    speed: random(0.5, 2)
+                });
+            }
+            
+            // 创建音效
+            try {
+                bgMusic = createBackgroundMusic();
+                bgMusic.start();
+            } catch (e) {
+                console.log("音乐初始化失败:", e);
+            }
+            
+            // 设置键盘监听
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+        }
+
+        function draw() {
+            background(0, 20);
+            
+            // 绘制星空
+            drawStars();
+            
+            // 游戏逻辑
+            if (gameState === "playing") {
+                updatePlayer();
+                updateBullets();
+                updateEnemies();
+                updateParticles();
+                checkCollisions();
+            } else {
+                drawGameOver();
+            }
+            
+            // 更新分数显示
+            document.getElementById('score').textContent = score;
+        }
+
+        function drawStars() {
+            push();
+            for (let star of stars) {
+                fill(200, 200, 255, 200);
+                noStroke();
+                circle(star.x, star.y, star.size);
+                
+                // 移动星星
+                star.y += star.speed;
+                if (star.y > height) {
+                    star.y = 0;
+                    star.x = random(width);
+                }
+            }
+            pop();
+        }
+
+        function updatePlayer() {
+            // 移动玩家
+            if (player.isMovingLeft) player.x -= player.speed;
+            if (player.isMovingRight) player.x += player.speed;
+            
+            // 限制玩家不超出画布
+            player.x = constrain(player.x, player.size/2, width - player.size/2);
+            
+            // 绘制玩家飞船
+            push();
+            // 飞船主体
+            fill(...player.color);
+            stroke(0, 255, 255);
+            strokeWeight(2);
+            triangle(
+                player.x, player.y - player.size/2,
+                player.x - player.size/2, player.y + player.size/2,
+                player.x + player.size/2, player.y + player.size/2
+            );
+            
+            // 飞船引擎效果
+            let flameSize = random(5, 15);
+            fill(255, 200, 0);
+            noStroke();
+            triangle(
+                player.x - 8, player.y + player.size/2,
+                player.x, player.y + player.size/2 + flameSize,
+                player.x + 8, player.y + player.size/2
+            );
+            pop();
+        }
+
+        function updateBullets() {
+            // 更新子弹位置
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                
+                // 移除超出画布的子弹
+                if (bullets[i].y < 0) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // 绘制子弹
+                push();
+                stroke(0, 200, 255);
+                strokeWeight(2);
+                line(bullets[i].x, bullets[i].y, bullets[i].x, bullets[i].y + 10);
+                pop();
+            }
+        }
+
+        function updateEnemies() {
+            // 随机生成敌人
+            if (frameCount % 60 === 0) {
+                let enemy = {
+                    x: random(width),
+                    y: random(-100, -30),
+                    size: random(20, 40),
+                    speed: random(1, 3),
+                    color: [random(150, 255), random(50), random(50)]
+                };
+                enemies.push(enemy);
+            }
+            
+            // 更新敌人位置
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemies[i].speed;
+                
+                // 移除超出画布的敌人
+                if (enemies[i].y > height) {
+                    enemies.splice(i, 1);
+                    continue;
+                }
+                
+                // 绘制敌人（陨石）
+                push();
+                fill(...enemies[i].color);
+                noStroke();
+                beginShape();
+                for (let a = 0; a < TWO_PI; a += PI/4) {
+                    let offset = map(sin(a * 5 + frameCount * 0.1), -1, 1, 0.8, 1.2);
+                    let r = enemies[i].size/2 * offset;
+                    let x = enemies[i].x + r * cos(a);
+                    let y = enemies[i].y + r * sin(a);
+                    vertex(x, y);
+                }
+                endShape(CLOSE);
+                pop();
+            }
+        }
+
+        function updateParticles() {
+            // 更新粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx;
+                particles[i].y += particles[i].vy;
+                particles[i].alpha -= 2;
+                
+                // 移除消失的粒子
+                if (particles[i].alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                
+                // 绘制粒子
+                push();
+                noStroke();
+                fill(particles[i].color[0], particles[i].color[1], particles[i].color[2], particles[i].alpha);
+                circle(particles[i].x, particles[i].y, particles[i].size);
+                pop();
+            }
+        }
+
+        function checkCollisions() {
+            // 检查子弹与敌人的碰撞
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let d = dist(bullets[i].x, bullets[i].y, enemies[j].x, enemies[j].y);
+                    if (d < enemies[j].size/2) {
+                        // 碰撞发生
+                        createExplosion(enemies[j].x, enemies[j].y, enemies[j].color);
+                        createExplosionSound();
+                        bullets.splice(i, 1);
+                        enemies.splice(j, 1);
+                        score += 10;
+                        break;
+                    }
+                }
+            }
+            
+            // 检查玩家与敌人的碰撞
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                let d = dist(player.x, player.y, enemies[j].x, enemies[j].y);
+                if (d < player.size/2 + enemies[j].size/2) {
+                    // 游戏结束
+                    createExplosion(player.x, player.y, player.color);
+                    createExplosionSound();
+                    enemies.splice(j, 1);
+                    gameState = "gameOver";
+                }
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            // 创建爆炸粒子
+            for (let i = 0; i < 30; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: random(-2, 2),
+                    vy: random(-2, 2),
+                    size: random(2, 6),
+                    color: color,
+                    alpha: 255
+                });
+            }
+        }
+
+        function drawGameOver() {
+            // 绘制游戏结束画面
+            push();
+            fill(0, 200, 255, 150);
+            textSize(48);
+            textAlign(CENTER, CENTER);
+            text("游戏结束", width/2, height/2 - 50);
+            
+            textSize(24);
+            text(`最终分数: ${score}`, width/2, height/2 + 20);
+            
+            textSize(18);
+            text("按R键重新开始", width/2, height/2 + 70);
+            pop();
+        }
+
+        function handleKeyDown(e) {
+            if (gameState === "playing") {
+                if (e.key === "ArrowLeft") player.isMovingLeft = true;
+                if (e.key === "ArrowRight") player.isMovingRight = true;
+                if (e.key === " ") {
+                    // 发射子弹
+                    bullets.push({
+                        x: player.x,
+                        y: player.y - player.size/2,
+                        speed: 10
+                    });
+                    createShootSound();
+                    // 防止空格键滚动页面
+                    e.preventDefault();
+                }
+            }
+            
+            if (e.key === "r" || e.key === "R") {
+                restartGame();
+            }
+        }
+
+        function handleKeyUp(e) {
+            if (e.key === "ArrowLeft") player.isMovingLeft = false;
+            if (e.key === "ArrowRight") player.isMovingRight = false;
+        }
+
+        function toggleMusic() {
+            if (bgMusic && bgMusic.isPlaying) {
+                bgMusic.stop();
+            } else if (bgMusic) {
+                bgMusic.loop();
+            }
+        }
+
+        function restartGame() {
+            // 重置游戏状态
+            player.x = width / 2;
+            enemies = [];
+            bullets = [];
+            particles = [];
+            score = 0;
+            gameState = "playing";
+            
+            // 重新开始音乐
+            if (bgMusic) {
+                bgMusic.stop();
+                bgMusic.loop();
+            }
+        }
+    </script>
+</body>
+</html>
