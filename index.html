@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>延边ABC游戏协会</title>
+    <link rel="icon" href="延边ABC Logo">
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+        header {
+            background: #2d8cf0;
+            color: #fff;
+            padding: 30px 0 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        header img {
+            width: 80px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+        }
+        h1 {
+            margin: 10px 0 5px 0;
+            font-size: 2.5em;
+            letter-spacing: 2px;
+        }
+        .subtitle {
+            font-size: 1.2em;
+            color: #e0eafc;
+            margin-bottom: 10px;
+        }
+        main {
+            max-width: 900px;
+            margin: 30px auto;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 4px 24px rgba(45,140,240,0.08);
+            padding: 32px 24px 24px 24px;
+        }
+        .games {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+        .game-card {
+            background: #f7faff;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(45,140,240,0.07);
+            width: 210px;
+            text-align: center;
+            padding: 24px 12px 18px 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: #222;
+        }
+        .game-card:hover {
+            transform: translateY(-6px) scale(1.04);
+            box-shadow: 0 8px 24px rgba(45,140,240,0.15);
+            background: #e6f0fa;
+        }
+        .game-card img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            margin-bottom: 12px;
+        }
+        .game-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .game-desc {
+            font-size: 0.98em;
+            color: #666;
+        }
+        .section-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin: 32px 0 12px 0;
+            color: #2d8cf0;
+        }
+        .dev-section {
+            background: #f0f7ff;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 30px;
+        }
+        .contact {
+            text-align: center;
+            color: #888;
+            font-size: 1em;
+            margin-top: 30px;
+        }
+        @media (max-width: 700px) {
+            main { padding: 10px 2vw; }
+            .games { flex-direction: column; align-items: center; gap: 18px; }
+            .game-card { width: 95vw; max-width: 340px; }
+        }
+        #chat-form {
+          display: flex;
+          align-items: center;
+          border-top: 1px solid #e0eafc;
+          background: #fff;
+          padding: 0;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        #chat-form button[type="button"] {
+          background: none;
+          border: none;
+          font-size: 1.3em;
+          cursor: pointer;
+          margin: 0 2px;
+          padding: 0 6px;
+          width: 32px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          overflow: visible;
+        }
+        #chat-input {
+          flex: 1;
+          min-width: 0;
+          padding: 8px 10px;
+          border: none;
+          border-radius: 0 0 0 18px;
+          font-size: 1em;
+          outline: none;
+          background: #fff;
+          margin: 0 2px;
+        }
+        #chat-form button[type="submit"] {
+          background: #2d8cf0;
+          color: #fff;
+          border: none;
+          padding: 0 18px;
+          border-radius: 0 0 18px 0;
+          font-size: 1em;
+          cursor: pointer;
+          margin-left: 2px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        @media (max-width: 500px) {
+          #chat-form button[type="button"], #chat-form button[type="submit"] {
+            width: 28px;
+            height: 28px;
+            font-size: 1.1em;
+            padding: 0 2px;
+          }
+          #chat-input {
+            font-size: 0.95em;
+            padding: 6px 6px;
+          }
+        }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <header>
+        <img src="延边ABC Logo.png" alt="延边ABC Logo">
+        <h1>延边ABC游戏协会</h1>
+        <div class="subtitle">专注于网络游戏与创新开发 | 五子棋、俄罗斯方块、开心消消乐、冰桶挑战</div>
+        <div id="user-bar" style="position:absolute;top:30px;right:40px;font-size:1em;background-color:rgba(0,0,0,0.3);padding:8px 15px;border-radius:25px;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+            <button id="login-btn" style="padding:6px 18px;border-radius:20px;background:#fff;color:#082d57;border:none;cursor:pointer;font-weight:bold;">会员注册/登录</button>
+        </div>
+    </header>
+    <!-- 顶部通知横向滚动条 -->
+    <div id="notice-marquee-bar" style="width:100%;max-width:900px;margin:10px auto 0 auto;display:flex;align-items:center;min-height:36px;background:linear-gradient(90deg,#e0eafc 60%,#f7faff 100%);border-radius:8px;box-shadow:0 2px 8px #0001;font-size:1.1em;color:#2d8cf0;position:relative;overflow:hidden;">
+      <div style="padding:0 12px;font-weight:bold;">通知：</div>
+      <div id="notice-marquee-wrap" style="flex:1;overflow:hidden;position:relative;height:36px;display:flex;align-items:center;"><div id="notice-marquee" style="white-space:nowrap;display:inline-block;position:absolute;left:0;top:0;"></div></div>
+    </div>
+    <!-- 顶部横幅广告位 -->
+    <div id="ad-banner" style="width:100%;max-width:900px;margin:18px auto 0 auto;display:flex;justify-content:center;align-items:center;min-height:70px;max-height:90px;overflow:auto;background:linear-gradient(90deg,#f7faff 60%,#e0eafc 100%);border-radius:12px;box-shadow:0 2px 8px #0001;font-size:1.2em;color:#2d8cf0;letter-spacing:2px;position:relative;">
+      <div id="ad-banner-content" style="width:100%;padding:8px 0;">
+        <!-- 广告内容由JS渲染 -->
+      </div>
+    </div>
+    <main>
+        <div class="section-title">热门游戏</div>
+        <div class="games">
+            <a class="game-card" href="五子棋/五子棋.html" target="_blank">
+                <img src="五子棋/五子棋.png" alt="五子棋">
+                <div class="game-title">五子棋</div>
+                <div class="game-desc">经典人机对战，策略与智慧的较量。</div>
+            </a>
+            <a class="game-card" href="俄罗斯方块/俄罗斯方块.html" target="_blank">
+                <img src="俄罗斯方块/俄罗斯方块.png" alt="俄罗斯方块">
+                <div class="game-title">俄罗斯方块</div>
+                <div class="game-desc">消除方块，挑战极限，童年回忆。</div>
+            </a>
+            <a class="game-card" href="开心消消乐/kaixinlian/index.html" target="_blank">
+                <img src="开心消消乐/kaixinlian/kaixinlian.png" alt="开心消消乐">
+                <div class="game-title">开心消消乐</div>
+                <div class="game-desc">三消闯关，趣味无限，适合所有年龄。</div>
+            </a>
+            <a class="game-card" href="冰桶/index.html" target="_blank">
+                <img src="冰桶/img/bucket.png" alt="나를잡아봐봐">
+                <div class="game-title">나를잡아봐봐</div>
+                <div class="game-desc">趣味挑战，反应与勇气的考验。</div>
+            </a>
+            <div class="game-card" id="member-games-platform" style="cursor:pointer;border:2px dashed #2d8cf0;">
+                <div style="font-size:3em;color:#2d8cf0;margin-bottom:12px;">🎮</div>
+                <div class="game-title">会员游戏平台</div>
+                <div class="game-desc">会员开发作品展示，支持上传分享。</div>
+                <div style="margin-top:8px;font-size:0.9em;color:#2d8cf0;">点击查看</div>
+            </div>
+            <div class="game-card" id="upload-game-btn" style="cursor:pointer;border:2px dashed #f39c12;">
+                <div style="font-size:3em;color:#f39c12;margin-bottom:12px;">📤</div>
+                <div class="game-title">上传游戏</div>
+                <div class="game-desc">会员可上传自己的游戏作品。</div>
+                <div style="margin-top:8px;font-size:0.9em;color:#f39c12;">点击上传</div>
+            </div>
+            <div class="game-card" id="more-games-btn" style="cursor:pointer;border:2px dashed #9c27b0;width:60px;height:40px;display:flex;align-items:center;justify-content:center;padding:6px;">
+                <div style="font-size:0.8em;color:#9c27b0;font-weight:bold;">更多游戏</div>
+            </div>
+        </div>
+        <div class="section-title">游戏开发与合作</div>
+        <div class="dev-section">
+            <p>延边ABC游戏协会不仅专注于精品网络游戏的开发与运营，还承接各类游戏定制开发、H5小游戏、微信/抖音小游戏、企业互动娱乐解决方案等业务。</p>
+            <ul>
+                <li>专业团队，丰富经验，支持多平台上线</li>
+                <li>可定制五子棋、消消乐、俄罗斯方块等多种玩法</li>
+                <li>支持积分、排行榜、社交分享、广告变现等功能</li>
+                <li>欢迎企业、学校、个人洽谈合作，共创游戏新体验！</li>
+            </ul>
+        </div>
+        <div class="section-title">联系我们</div>
+        <!-- 底部大矩形广告位 -->
+        <div id="ad-footer" style="width:100%;max-width:900px;margin:28px auto 18px auto;min-height:120px;max-height:140px;overflow:auto;display:flex;justify-content:center;align-items:center;background:linear-gradient(90deg,#e0eafc 60%,#f7faff 100%);border-radius:16px;box-shadow:0 2px 12px #0001;font-size:1.3em;color:#2d8cf0;position:relative;">
+          <div id="ad-footer-content" style="width:100%;padding:12px 0;text-align:center;"></div>
+        </div>
+        <div class="contact">
+            邮箱：abcgame@ybabc.com<br>
+            微信：yb_abcgame<br>
+            地址：延边朝鲜族自治州创新创业园
+        </div>
+    </main>
+    <!-- 登录/注册弹窗 -->
+    <div id="auth-modal" style="display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+      <div style="background:linear-gradient(to bottom, #f9f9f9, #fff);border-radius:15px;box-shadow:0 8px 32px rgba(0,0,0,0.2);padding:32px 28px 22px 28px;min-width:350px;max-width:90vw;border:1px solid #e0eafc;">
+        <h2 id="auth-title" style="margin:0 0 22px 0;text-align:center;color:#063d77;font-size:1.6em;border-bottom:2px solid #2d8cf0;padding-bottom:10px;">会员登录</h2>
+        <form id="auth-form" autocomplete="off">
+          <div style="margin-bottom:18px;">
+            <input id="auth-username" type="text" placeholder="用户名" required style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:22px;">
+            <input id="auth-password" type="password" placeholder="密码" required style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <button type="submit" style="width:100%;padding:12px 0;background:linear-gradient(to bottom, #2d8cf0, #2170c8);color:#fff;font-size:1.2em;border:none;border-radius:8px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.2);transition:all 0.2s ease;">登录</button>
+        </form>
+        <div style="margin-top:15px;text-align:center;">
+          <span id="toggle-auth" style="color:#2d8cf0;cursor:pointer;font-weight:bold;padding:5px 10px;border-radius:15px;background:#f0f7ff;transition:all 0.2s ease;">没有账号？注册</span>
+        </div>
+        <div id="auth-error" style="color:#f44336;text-align:center;margin-top:12px;padding:8px;background:#ffebee;border-radius:5px;display:none;font-weight:bold;"></div>
+      </div>
+    </div>
+    
+    <!-- 会员信息管理弹窗 -->
+    <div id="member-profile-modal" style="display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+      <div style="background:linear-gradient(to bottom, #f9f9f9, #fff);border-radius:15px;box-shadow:0 8px 32px rgba(0,0,0,0.2);padding:32px 28px 18px 28px;min-width:350px;max-width:90vw;max-height:90vh;overflow-y:auto;border:1px solid #e0eafc;">
+        <h2 style="margin:0 0 20px 0;text-align:center;color:#032244;font-size:1.6em;border-bottom:2px solid #2d8cf0;padding-bottom:10px;">会员信息管理</h2>
+        <form id="member-profile-form" autocomplete="off">
+          <div style="margin-bottom:18px;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">用户名：</label>
+            <input id="profile-username" type="text" readonly style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;background:#f5f5f5;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:22px;background:#f0f7ff;padding:15px;border-radius:10px;border-left:4px solid #2d8cf0;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">更改密码：</label>
+            <input id="profile-old-password" type="password" placeholder="当前密码" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+            <input id="profile-new-password" type="password" placeholder="新密码" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+            <input id="profile-confirm-password" type="password" placeholder="确认新密码" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:18px;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">所在城市：</label>
+            <input id="profile-city" type="text" placeholder="请输入您所在的城市" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:18px;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">毕业院校：</label>
+            <input id="profile-school" type="text" placeholder="请输入您的毕业院校" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:18px;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">专业：</label>
+            <input id="profile-major" type="text" placeholder="请输入您的专业" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);">
+          </div>
+          <div style="margin-bottom:22px;">
+            <label style="display:block;margin-bottom:8px;font-weight:bold;color:#2d8cf0;">爱好兴趣：</label>
+            <textarea id="profile-interests" placeholder="请输入您的爱好兴趣，多个爱好可用逗号分隔" style="width:100%;padding:12px 15px;font-size:1.1em;border-radius:8px;border:1px solid #ccc;resize:vertical;height:90px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.1);"></textarea>
+          </div>
+          <div style="display:flex;gap:15px;">
+            <button type="submit" style="flex:1;padding:12px 0;background:linear-gradient(to bottom, #2d8cf0, #2170c8);color:#fff;font-size:1.2em;border:none;border-radius:8px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.2);transition:all 0.2s ease;">保存信息</button>
+            <button type="button" id="cancel-profile" style="flex:1;padding:12px 0;background:#e0e0e0;color:#333;border:none;border-radius:8px;font-size:1.1em;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,0.1);transition:all 0.2s ease;">取消</button>
+          </div>
+        </form>
+        <div id="profile-error" style="color:#f44336;text-align:center;margin-top:12px;padding:8px;background:#ffebee;border-radius:5px;display:none;font-weight:bold;"></div>
+        <div id="profile-success" style="color:#4caf50;text-align:center;margin-top:12px;padding:8px;background:#e8f5e9;border-radius:5px;display:none;font-weight:bold;"></div>
+      </div>
+    </div>
+
+    <!-- 背景音乐播放器 -->
+    <audio id="bg-music" src="开心消消乐/kaixinlian/audio/SeaTreasureMatch.mp3" loop></audio>
+    <div id="music-bar" style="position:fixed;bottom:18px;right:24px;z-index:999;background:#fff8;padding:8px 18px 8px 12px;border-radius:24px;box-shadow:0 2px 8px #0001;display:flex;align-items:center;gap:8px;">
+      <button id="music-toggle" style="background:none;border:none;font-size:1.3em;cursor:pointer;color:#2d8cf0;">🎵</button>
+      <span style="font-size:1em;color:#2d8cf0;">背景音乐</span>
+    </div>
+    <!-- 聊天浮窗 -->
+    <div id="chat-float" style="position:fixed;bottom:90px;right:24px;z-index:9999;display:none;">
+      <div id="chat-toggle" style="background:#2d8cf0;color:#fff;padding:10px 22px;border-radius:18px 18px 0 0;cursor:pointer;box-shadow:0 2px 8px #0002;font-size:1.1em;">会员聊天 ▲</div>
+      <div id="chat-window" style="display:none;width:320px;height:300px;max-width:95vw;max-height:80vh;min-width:280px;min-height:200px;background:#fff;border-radius:0 0 18px 18px;box-shadow:0 4px 24px #0002;position:relative;resize:both;overflow:hidden;">
+        <div id="chat-header" style="background:#f0f7ff;padding:8px 12px;border-bottom:1px solid #e0eafc;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button id="group-chat-btn" style="background:#2d8cf0;color:#fff;border:none;padding:4px 8px;border-radius:4px;font-size:0.9em;cursor:pointer;">群聊</button>
+            <button id="private-chat-btn" style="background:#ccc;color:#666;border:none;padding:4px 8px;border-radius:4px;font-size:0.9em;cursor:pointer;">私聊</button>
+            <select id="private-user-select" style="display:none;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.9em;">
+              <option value="">选择私聊用户...</option>
+            </select>
+          </div>
+        </div>
+        <div id="chat-messages" style="height:calc(100% - 90px);overflow-y:auto;padding:12px 10px 6px 10px;font-size:1em;"></div>
+        <form id="chat-form" style="display:flex;border-top:1px solid #e0eafc;position:absolute;bottom:0;left:0;right:0;background:#fff;">
+          <button type="button" id="emoji-btn" style="background:none;border:none;font-size:1.3em;cursor:pointer;">😊</button>
+          <button type="button" id="img-btn" style="background:none;border:none;font-size:1.3em;cursor:pointer;">🖼️</button>
+          <button type="button" id="video-btn" style="background:none;border:none;font-size:1.3em;cursor:pointer;">📹</button>
+          <input id="chat-input" type="text" placeholder="输入聊天内容..." maxlength="200" style="flex:1;padding:8px 10px;border:none;border-radius:0 0 0 18px;font-size:1em;outline:none;">
+          <button type="submit" style="background:#2d8cf0;color:#fff;border:none;padding:0 18px;border-radius:0 0 18px 0;font-size:1em;cursor:pointer;">发送</button>
+          <input type="file" id="img-file" accept="image/*" style="display:none;">
+        </form>
+        <button id="fullscreen-btn" style="position:absolute;top:8px;right:8px;width:24px;height:24px;background:rgba(45,140,240,0.1);border:1px solid #2d8cf0;border-radius:4px;cursor:pointer;font-size:1.2em;color:#2d8cf0;display:flex;align-items:center;justify-content:center;transition:all 0.2s;" title="全屏显示" onmouseover="this.style.background='rgba(45,140,240,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(45,140,240,0.1)';this.style.transform='scale(1)'">⛶</button>
+        <div id="resize-handle" style="position:absolute;bottom:2px;right:2px;width:12px;height:12px;cursor:se-resize;background:linear-gradient(45deg,transparent 30%,#ccc 30%,#ccc 40%,transparent 40%,transparent 60%,#ccc 60%,#ccc 70%,transparent 70%);border-radius:2px;"></div>
+      </div>
+    </div>
+    <div id="emoji-panel" style="display:none;position:absolute;bottom:60px;right:24px;z-index:10000;background:#fff;border-radius:12px;box-shadow:0 2px 12px #0002;padding:8px 10px;max-width:320px;">
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😀</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😂</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😍</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😎</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😭</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">👍</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">🎉</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">🥳</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😡</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">🤔</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😅</span>
+      <span style="font-size:1.3em;cursor:pointer;padding:4px;">😏</span>
+    </div>
+    <!-- 视频通话弹窗 -->
+    <div id="video-call-modal" style="display:none;position:fixed;z-index:10001;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
+      <div style="background:#fff;padding:24px 18px;border-radius:12px;max-width:90vw;">
+        <h3 style="margin:0 0 12px 0;">发起视频通话</h3>
+        <input id="video-peer-id" placeholder="对方用户名" style="padding:8px 12px;border-radius:6px;border:1px solid #ccc;">
+        <button id="video-call-start" style="margin-left:10px;padding:8px 18px;border-radius:6px;background:#2d8cf0;color:#fff;border:none;">呼叫</button>
+        <button id="video-call-cancel" style="margin-left:10px;padding:8px 18px;border-radius:6px;background:#ccc;color:#333;border:none;">取消</button>
+      </div>
+    </div>
+    <!-- 视频窗口 -->
+    <div id="video-chat-window" style="display:none;position:fixed;z-index:10002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;">
+      <video id="local-video" autoplay muted playsinline style="width:320px;border-radius:12px;margin:10px 0;"></video>
+      <video id="remote-video" autoplay playsinline style="width:320px;border-radius:12px;margin:10px 0;"></video>
+      <button id="video-hangup" style="padding:10px 30px;border-radius:8px;background:#f44336;color:#fff;border:none;font-size:1.1em;">挂断</button>
+    </div>
+    
+    <!-- 会员游戏平台弹窗 -->
+    <div id="member-games-modal" style="display:none;position:fixed;z-index:10003;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.35);justify-content:center;align-items:center;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 24px #0002;padding:24px;min-width:600px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2 style="margin:0;color:#2d8cf0;">会员游戏平台</h2>
+          <button id="close-member-games" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:#666;">×</button>
+        </div>
+        <div id="member-games-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+          <!-- 会员游戏列表由JS动态生成 -->
+        </div>
+        <div id="no-games-msg" style="text-align:center;color:#888;padding:40px 0;display:none;">
+          暂无会员上传的游戏作品
+        </div>
+      </div>
+    </div>
+    
+    <!-- 上传游戏弹窗 -->
+    <div id="upload-game-modal" style="display:none;position:fixed;z-index:10004;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.35);justify-content:center;align-items:center;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 24px #0002;padding:24px;min-width:400px;max-width:90vw;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2 style="margin:0;color:#f39c12;">上传游戏作品</h2>
+          <button id="close-upload-game" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:#666;">×</button>
+        </div>
+        <form id="upload-game-form">
+          <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:bold;">游戏名称：</label>
+            <input id="game-name" type="text" required style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:1em;">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:bold;">游戏描述：</label>
+            <textarea id="game-description" rows="3" required style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:1em;resize:vertical;"></textarea>
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:bold;">游戏链接：</label>
+            <input id="game-url" type="url" required placeholder="https://..." style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:1em;">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:bold;">游戏图标：</label>
+            <input id="game-icon" type="file" accept="image/*" style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:1em;">
+            <div style="font-size:0.9em;color:#666;margin-top:4px;">支持jpg、png、gif格式，建议尺寸80x80px</div>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <button type="submit" style="flex:1;padding:10px 0;background:#f39c12;color:#fff;border:none;border-radius:6px;font-size:1em;font-weight:bold;cursor:pointer;">上传游戏</button>
+            <button type="button" id="cancel-upload" style="flex:1;padding:10px 0;background:#ccc;color:#333;border:none;border-radius:6px;font-size:1em;cursor:pointer;">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- 更多游戏弹窗 -->
+    <div id="more-games-modal" style="display:none;position:fixed;z-index:10005;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.35);justify-content:center;align-items:center;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 24px #0002;padding:24px;min-width:600px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2 style="margin:0;color:#9c27b0;">更多精彩游戏</h2>
+          <button id="close-more-games" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:#666;">×</button>
+        </div>
+        <div id="more-games-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+          <!-- 更多游戏列表由JS动态生成 -->
+        </div>
+      </div>
+    </div>
+    <div id="notice-btn" style="position:fixed;top:24px;left:24px;z-index:1000;"><button style="background:#2d8cf0;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:1em;cursor:pointer;box-shadow:0 2px 8px #0002;">通知</button></div>
+    <div id="notice-modal" style="display:none;position:fixed;z-index:20001;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.35);justify-content:center;align-items:center;">
+      <div style="background:#fff;border-radius:14px;box-shadow:0 4px 24px #0003;padding:32px 24px 18px 24px;max-width:95vw;max-height:90vh;overflow:auto;position:relative;min-width:320px;">
+        <h2 style="margin:0 0 18px 0;text-align:center;color:#2d8cf0;">通知公告</h2>
+        <div id="notice-list-view"></div>
+        <button id="notice-close" style="position:absolute;top:18px;right:28px;background:none;border:none;font-size:2em;color:#2d8cf0;cursor:pointer;z-index:10;">×</button>
+      </div>
+    </div>
+    <script>
+    // 会员登录/注册逻辑
+    const userBar = document.getElementById('user-bar');
+    const loginBtn = document.getElementById('login-btn');
+    const authModal = document.getElementById('auth-modal');
+    const authForm = document.getElementById('auth-form');
+    const authTitle = document.getElementById('auth-title');
+    const toggleAuth = document.getElementById('toggle-auth');
+    const authError = document.getElementById('auth-error');
+    let isLoginMode = true;
+    function getUsers() {
+      return JSON.parse(localStorage.getItem('abc_users')||'{}');
+    }
+    function setUsers(users) {
+      localStorage.setItem('abc_users', JSON.stringify(users));
+    }
+    function getUserProfiles() {
+      return JSON.parse(localStorage.getItem('abc_user_profiles')||'{}');
+    }
+    function setUserProfiles(profiles) {
+      localStorage.setItem('abc_user_profiles', JSON.stringify(profiles));
+    }
+    function getUserProfile(username) {
+      const profiles = getUserProfiles();
+      return profiles[username] || {
+        city: '',
+        school: '',
+        major: '',
+        interests: ''
+      };
+    }
+    function setUserProfile(username, profile) {
+      const profiles = getUserProfiles();
+      profiles[username] = profile;
+      setUserProfiles(profiles);
+    }
+    function setCurrentUser(username) {
+      localStorage.setItem('abc_current_user', username);
+    }
+    function getCurrentUser() {
+      return localStorage.getItem('abc_current_user');
+    }
+    function logout() {
+      localStorage.removeItem('abc_current_user');
+      renderUserBar();
+    }
+    function renderUserBar() {
+      const user = getCurrentUser();
+      if (user) {
+        userBar.innerHTML = `欢迎，<b>${user}</b> | <span id="profile-btn" style="color:#fff;cursor:pointer;margin-right:10px;background-color:#2d8cf0;padding:4px 10px;border-radius:15px;font-weight:bold;">会员信息</span> | <span id="logout-btn" style="color:#fff;cursor:pointer;background-color:#f44336;padding:4px 10px;border-radius:15px;font-weight:bold;">退出登录</span>${user==='admin'?'<a href="admin.html" id="admin-link" style="margin-left:18px;color:#fff;background:#2d8cf0;padding:6px 16px;border-radius:18px;text-decoration:none;font-weight:bold;">后台管理</a>':''}`;        
+        document.getElementById('profile-btn').onclick = showProfileModal;
+        document.getElementById('logout-btn').onclick = logout;
+      } else {
+        userBar.innerHTML = `<button id="login-btn" style="padding:6px 18px;border-radius:20px;background:#fff;color:#2d8cf0;border:none;cursor:pointer;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.2);">会员注册/登录</button>`;
+        document.getElementById('login-btn').onclick = () => { authModal.style.display = 'flex'; };
+      }
+    }
+    // 广告管理逻辑
+    function getAdData() {
+      const raw = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
+      const normalizeArr = (arr)=> (arr||[]).map(item=>{
+        if(typeof item === 'string') { return { text: item, imgs: [] }; }
+        if(item && typeof item === 'object') {
+          return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
+        }
+        return { text: '', imgs: [] };
+      });
+      return { banner: normalizeArr(raw.banner), footer: normalizeArr(raw.footer) };
+    }
+    function setAdData(data) {
+      localStorage.setItem('abc_ads', JSON.stringify(data));
+    }
+    // 广告渲染（图片+文字）
+    function renderAdItem(ad, padding, idx, type) {
+      let html = '';
+      if(ad.imgs && ad.imgs.length) {
+        html += ad.imgs.map((img,i)=>`<img src='${img}' style='max-height:60px;max-width:120px;margin-right:8px;border-radius:8px;vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}' data-imgidx='${i}'>`).join('');
+      }
+      if(ad.text) {
+        html += `<span style='vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}'>${ad.text}</span>`;
+      }
+      return `<div style='padding:${padding};display:flex;align-items:center;gap:8px;justify-content:center;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}'>${html}</div>`;
+    }
+    // 轮播逻辑
+    let adBannerIndex = 0, adFooterIndex = 0, adBannerTimer = null, adFooterTimer = null;
+    function startAdCarousel() {
+      const adData = getAdData();
+      const adBannerDiv = document.getElementById('ad-banner-content');
+      const adFooterDiv = document.getElementById('ad-footer-content');
+      // 顶部广告
+      if(adData.banner.length>1) {
+        adBannerIndex = 0;
+        if(adBannerTimer) clearInterval(adBannerTimer);
+        adBannerDiv.innerHTML = renderAdItem(adData.banner[adBannerIndex], '2px 0', adBannerIndex, 'banner');
+        adBannerTimer = setInterval(()=>{
+          adBannerIndex = (adBannerIndex+1)%adData.banner.length;
+          adBannerDiv.innerHTML = renderAdItem(adData.banner[adBannerIndex], '2px 0', adBannerIndex, 'banner');
+        }, 3000);
+      } else if(adData.banner.length===1) {
+        if(adBannerTimer) clearInterval(adBannerTimer);
+        adBannerDiv.innerHTML = renderAdItem(adData.banner[0], '2px 0', 0, 'banner');
+      } else {
+        if(adBannerTimer) clearInterval(adBannerTimer);
+        adBannerDiv.innerHTML = '';
+      }
+      // 底部广告
+      if(adData.footer.length>1) {
+        adFooterIndex = 0;
+        if(adFooterTimer) clearInterval(adFooterTimer);
+        adFooterDiv.innerHTML = renderAdItem(adData.footer[adFooterIndex], '4px 0', adFooterIndex, 'footer');
+        adFooterTimer = setInterval(()=>{
+          adFooterIndex = (adFooterIndex+1)%adData.footer.length;
+          adFooterDiv.innerHTML = renderAdItem(adData.footer[adFooterIndex], '4px 0', adFooterIndex, 'footer');
+        }, 3000);
+      } else if(adData.footer.length===1) {
+        if(adFooterTimer) clearInterval(adFooterTimer);
+        adFooterDiv.innerHTML = renderAdItem(adData.footer[0], '4px 0', 0, 'footer');
+      } else {
+        if(adFooterTimer) clearInterval(adFooterTimer);
+        adFooterDiv.innerHTML = '';
+      }
+    }
+    // 修改renderAds，编辑广告后立即刷新轮播
+    function renderAds() {
+      const adData = getAdData();
+      const adBannerDiv = document.getElementById('ad-banner-content');
+      const adFooterDiv = document.getElementById('ad-footer-content');
+      adBannerDiv.innerHTML = adData.banner.map((ad,i)=>renderAdItem(ad, '2px 0', i, 'banner')).join('');
+      adFooterDiv.innerHTML = adData.footer.map((ad,i)=>renderAdItem(ad, '4px 0', i, 'footer')).join('');
+      startAdCarousel();
+    }
+
+    // 广告详细弹窗
+    if(!document.getElementById('ad-detail-modal')) {
+      const modal = document.createElement('div');
+      modal.id = 'ad-detail-modal';
+      modal.style = 'display:none;position:fixed;z-index:20000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);justify-content:center;align-items:center;';
+      modal.innerHTML = `<div id="ad-detail-content" style="background:#fff;border-radius:14px;box-shadow:0 4px 24px #0003;padding:32px 24px 18px 24px;max-width:95vw;max-height:90vh;overflow:auto;position:relative;text-align:center;"></div>`+
+        `<button id="ad-detail-close" style="position:absolute;top:18px;right:28px;background:none;border:none;font-size:2em;color:#2d8cf0;cursor:pointer;z-index:10;">×</button>`;
+      document.body.appendChild(modal);
+      document.getElementById('ad-detail-close').onclick = ()=>{ modal.style.display='none'; };
+      modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
+    }
+    function showAdDetail(ad) {
+      const modal = document.getElementById('ad-detail-modal');
+      const content = document.getElementById('ad-detail-content');
+      let imgsHtml = '';
+      if(ad.imgs && ad.imgs.length) {
+        imgsHtml = ad.imgs.map(img=>`<img src='${img}' style='max-width:90vw;max-height:50vh;margin:8px 0;border-radius:10px;box-shadow:0 2px 12px #0002;'>`).join('');
+      }
+      let textHtml = ad.text ? `<div style='margin:16px 0 0 0;font-size:1.2em;color:#2d8cf0;'>${ad.text}</div>` : '';
+      content.innerHTML = imgsHtml + textHtml;
+      modal.style.display = 'flex';
+    }
+    // 事件委托：点击广告栏图片或文字弹窗
+    document.getElementById('ad-banner-content').onclick = document.getElementById('ad-footer-content').onclick = function(e) {
+      let target = e.target;
+      let adtype = target.getAttribute('data-adtype');
+      let adidx = target.getAttribute('data-adidx');
+      if(adtype && adidx!==null) {
+        const adData = getAdData();
+        const ad = adData[adtype][adidx];
+        if(ad) showAdDetail(ad);
+      }
+    };
+    // 首次渲染
+    renderAds();
+    renderUserBar();
+    
+    // 会员游戏平台事件监听
+    document.getElementById('member-games-platform').onclick = showMemberGamesPlatform;
+    document.getElementById('upload-game-btn').onclick = showUploadGameModal;
+    document.getElementById('more-games-btn').onclick = showMoreGamesModal;
+    
+    // 弹窗关闭事件
+    document.getElementById('close-member-games').onclick = function() {
+      document.getElementById('member-games-modal').style.display = 'none';
+    };
+    document.getElementById('close-upload-game').onclick = function() {
+      document.getElementById('upload-game-modal').style.display = 'none';
+    };
+    document.getElementById('cancel-upload').onclick = function() {
+      document.getElementById('upload-game-modal').style.display = 'none';
+    };
+    document.getElementById('close-more-games').onclick = function() {
+      document.getElementById('more-games-modal').style.display = 'none';
+    };
+    
+    // 上传游戏表单提交
+    document.getElementById('upload-game-form').onsubmit = handleGameUpload;
+    
+    // 点击弹窗外部关闭
+    document.getElementById('member-games-modal').onclick = function(e) {
+      if (e.target === this) this.style.display = 'none';
+    };
+    document.getElementById('upload-game-modal').onclick = function(e) {
+      if (e.target === this) this.style.display = 'none';
+    };
+    document.getElementById('more-games-modal').onclick = function(e) {
+      if (e.target === this) this.style.display = 'none';
+    };
+    loginBtn.onclick = () => { authModal.style.display = 'flex'; };
+    authModal.onclick = e => { if(e.target===authModal) authModal.style.display='none'; };
+    toggleAuth.onclick = () => {
+      isLoginMode = !isLoginMode;
+      authTitle.textContent = isLoginMode ? '会员登录' : '会员注册';
+      authForm.querySelector('button[type=submit]').textContent = isLoginMode ? '登录' : '注册';
+      toggleAuth.textContent = isLoginMode ? '没有账号？注册' : '已有账号？登录';
+      authError.style.display = 'none';
+    };
+    authForm.onsubmit = e => {
+      e.preventDefault();
+      const username = document.getElementById('auth-username').value.trim();
+      const password = document.getElementById('auth-password').value;
+      if (!username || !password) return;
+      let users = getUsers();
+      if (isLoginMode) {
+        if (!users[username] || users[username] !== password) {
+          authError.textContent = '用户名或密码错误';
+          authError.style.display = 'block';
+          return;
+        }
+        setCurrentUser(username);
+        authModal.style.display = 'none';
+        renderUserBar();
+      } else {
+        if (users[username]) {
+          authError.textContent = '用户名已存在';
+          authError.style.display = 'block';
+          return;
+        }
+        users[username] = password;
+        setUsers(users);
+        setCurrentUser(username);
+        // 初始化用户资料
+        setUserProfile(username, {
+          city: '',
+          school: '',
+          major: '',
+          interests: ''
+        });
+        authModal.style.display = 'none';
+        renderUserBar();
+      }
+    };
+    
+    // 会员信息管理功能
+    const profileModal = document.getElementById('member-profile-modal');
+    const profileForm = document.getElementById('member-profile-form');
+    const profileError = document.getElementById('profile-error');
+    const profileSuccess = document.getElementById('profile-success');
+    
+    function showProfileModal() {
+      const username = getCurrentUser();
+      if (!username) return;
+      
+      // 填充用户名
+      document.getElementById('profile-username').value = username;
+      
+      // 清空密码字段
+      document.getElementById('profile-old-password').value = '';
+      document.getElementById('profile-new-password').value = '';
+      document.getElementById('profile-confirm-password').value = '';
+      
+      // 加载用户资料
+      const profile = getUserProfile(username);
+      document.getElementById('profile-city').value = profile.city || '';
+      document.getElementById('profile-school').value = profile.school || '';
+      document.getElementById('profile-major').value = profile.major || '';
+      document.getElementById('profile-interests').value = profile.interests || '';
+      
+      // 清空错误和成功信息
+      profileError.style.display = 'none';
+      profileSuccess.style.display = 'none';
+      
+      // 显示弹窗
+      profileModal.style.display = 'flex';
+    }
+    
+    // 关闭会员信息管理弹窗
+    document.getElementById('cancel-profile').onclick = function() {
+      profileModal.style.display = 'none';
+    };
+    
+    // 点击弹窗外部关闭
+    profileModal.onclick = function(e) {
+      if (e.target === this) this.style.display = 'none';
+    };
+    
+    // 提交会员信息表单
+    profileForm.onsubmit = function(e) {
+      e.preventDefault();
+      const username = document.getElementById('profile-username').value;
+      const oldPassword = document.getElementById('profile-old-password').value;
+      const newPassword = document.getElementById('profile-new-password').value;
+      const confirmPassword = document.getElementById('profile-confirm-password').value;
+      const city = document.getElementById('profile-city').value.trim();
+      const school = document.getElementById('profile-school').value.trim();
+      const major = document.getElementById('profile-major').value.trim();
+      const interests = document.getElementById('profile-interests').value.trim();
+      
+      // 清空错误和成功信息
+      profileError.style.display = 'none';
+      profileSuccess.style.display = 'none';
+      
+      // 更新用户资料
+      const profile = {
+        city: city,
+        school: school,
+        major: major,
+        interests: interests
+      };
+      setUserProfile(username, profile);
+      
+      // 如果填写了密码字段，则更改密码
+      if (oldPassword || newPassword || confirmPassword) {
+        // 验证所有密码字段都已填写
+        if (!oldPassword || !newPassword || !confirmPassword) {
+          profileError.textContent = '请填写所有密码字段';
+          profileError.style.display = 'block';
+          return;
+        }
+        
+        // 验证旧密码是否正确
+        const users = getUsers();
+        if (users[username] !== oldPassword) {
+          profileError.textContent = '当前密码不正确';
+          profileError.style.display = 'block';
+          return;
+        }
+        
+        // 验证新密码和确认密码是否一致
+        if (newPassword !== confirmPassword) {
+          profileError.textContent = '新密码和确认密码不一致';
+          profileError.style.display = 'block';
+          return;
+        }
+        
+        // 更新密码
+        users[username] = newPassword;
+        setUsers(users);
+        
+        // 清空密码字段
+        document.getElementById('profile-old-password').value = '';
+        document.getElementById('profile-new-password').value = '';
+        document.getElementById('profile-confirm-password').value = '';
+        
+        profileSuccess.textContent = '密码已更改，个人信息已保存';
+      } else {
+        profileSuccess.textContent = '个人信息已保存';
+      }
+      
+      profileSuccess.style.display = 'block';
+    };
+    // 背景音乐控制
+    const bgMusic = document.getElementById('bg-music');
+    const musicToggle = document.getElementById('music-toggle');
+    let musicPlaying = false;
+    function playMusic() {
+      bgMusic.volume = 0.5;
+      bgMusic.play().catch(()=>{});
+      musicToggle.textContent = '🔊';
+      musicPlaying = true;
+    }
+    function pauseMusic() {
+      bgMusic.pause();
+      musicToggle.textContent = '🎵';
+      musicPlaying = false;
+    }
+    musicToggle.onclick = () => {
+      if (musicPlaying) pauseMusic(); else playMusic();
+    };
+    // 自动播放（需用户首次交互）
+    window.addEventListener('click', function autoPlayOnce(){
+      if (!musicPlaying) playMusic();
+      window.removeEventListener('click', autoPlayOnce);
+    });
+    // 页面切换自动暂停/恢复
+    document.addEventListener('visibilitychange',()=>{
+      if(document.hidden) pauseMusic(); else if(getCurrentUser()) playMusic();
+    });
+    // 聊天窗口逻辑
+    function getCurrentUser() { return localStorage.getItem('abc_current_user'); }
+    function getChatMsgs() { return JSON.parse(localStorage.getItem('abc_chat_msgs')||'[]'); }
+    function setChatMsgs(msgs) { localStorage.setItem('abc_chat_msgs', JSON.stringify(msgs)); }
+    
+    // 私聊功能
+    let currentChatMode = 'group';
+    let currentPrivateUser = '';
+    
+    function getPrivateChatMsgs(targetUser) {
+      const key = `abc_private_chat_${getCurrentUser()}_${targetUser}`;
+      return JSON.parse(localStorage.getItem(key)||'[]');
+    }
+    
+    function setPrivateChatMsgs(targetUser, msgs) {
+      const key = `abc_private_chat_${getCurrentUser()}_${targetUser}`;
+      localStorage.setItem(key, JSON.stringify(msgs));
+    }
+    
+    function getAllUsers() {
+      const users = JSON.parse(localStorage.getItem('abc_users')||'{}');
+      const currentUser = getCurrentUser();
+      return Object.keys(users).filter(user => user !== currentUser && user !== 'admin');
+    }
+    
+    function updateUserSelect() {
+      const select = document.getElementById('private-user-select');
+      const users = getAllUsers();
+      select.innerHTML = '<option value="">选择私聊用户...</option>' + 
+        users.map(user => `<option value="${user}">${user}</option>`).join('');
+    }
+    
+    function switchChatMode(mode) {
+      currentChatMode = mode;
+      const groupBtn = document.getElementById('group-chat-btn');
+      const privateBtn = document.getElementById('private-chat-btn');
+      const userSelect = document.getElementById('private-user-select');
+      
+      if (mode === 'group') {
+        groupBtn.style.background = '#2d8cf0';
+        groupBtn.style.color = '#fff';
+        privateBtn.style.background = '#ccc';
+        privateBtn.style.color = '#666';
+        userSelect.style.display = 'none';
+        currentPrivateUser = '';
+        renderChatMsgs();
+      } else {
+        groupBtn.style.background = '#ccc';
+        groupBtn.style.color = '#666';
+        privateBtn.style.background = '#2d8cf0';
+        privateBtn.style.color = '#fff';
+        userSelect.style.display = 'block';
+        updateUserSelect();
+      }
+    }
+    
+    function onPrivateUserChange() {
+      const select = document.getElementById('private-user-select');
+      currentPrivateUser = select.value;
+      
+      if (currentPrivateUser) {
+        renderChatMsgs();
+      }
+    }
+    
+    // 聊天窗口大小调整功能
+    function getChatWindowSize() {
+      const saved = localStorage.getItem('abc_chat_window_size');
+      return saved ? JSON.parse(saved) : {width: 320, height: 300};
+    }
+    function setChatWindowSize(size) {
+      localStorage.setItem('abc_chat_window_size', JSON.stringify(size));
+    }
+    function getChatFullscreenState() {
+      return localStorage.getItem('abc_chat_fullscreen') === 'true';
+    }
+    function setChatFullscreenState(isFullscreen) {
+      localStorage.setItem('abc_chat_fullscreen', isFullscreen.toString());
+    }
+    
+    function initChatWindowResize() {
+      const chatWindow = document.getElementById('chat-window');
+      const resizeHandle = document.getElementById('resize-handle');
+      const fullscreenBtn = document.getElementById('fullscreen-btn');
+      const savedSize = getChatWindowSize();
+      const isFullscreen = getChatFullscreenState();
+      
+      if (isFullscreen) {
+        enterFullscreen();
+      } else {
+        chatWindow.style.width = savedSize.width + 'px';
+        chatWindow.style.height = savedSize.height + 'px';
+      }
+      
+      let isResizing = false;
+      let startX, startY, startWidth, startHeight;
+      
+      fullscreenBtn.onclick = function() {
+        const currentFullscreen = getChatFullscreenState();
+        if (currentFullscreen) {
+          exitFullscreen();
+        } else {
+          enterFullscreen();
+        }
+      };
+      
+      function enterFullscreen() {
+        chatWindow.style.width = '95vw';
+        chatWindow.style.height = '80vh';
+        chatWindow.style.maxWidth = '95vw';
+        chatWindow.style.maxHeight = '80vh';
+        resizeHandle.style.display = 'none';
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.title = '退出全屏';
+        setChatFullscreenState(true);
+      }
+      
+      function exitFullscreen() {
+        chatWindow.style.width = savedSize.width + 'px';
+        chatWindow.style.height = savedSize.height + 'px';
+        chatWindow.style.maxWidth = '95vw';
+        chatWindow.style.maxHeight = '80vh';
+        resizeHandle.style.display = 'block';
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.title = '全屏显示';
+        setChatFullscreenState(false);
+      }
+      
+      resizeHandle.onmousedown = function(e) {
+        e.preventDefault();
+        isResizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = parseInt(chatWindow.style.width);
+        startHeight = parseInt(chatWindow.style.height);
+        
+        document.body.style.cursor = 'se-resize';
+        document.body.style.userSelect = 'none';
+      };
+      
+      document.onmousemove = function(e) {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        let newWidth = startWidth + deltaX;
+        let newHeight = startHeight + deltaY;
+        
+        newWidth = Math.max(280, Math.min(newWidth, window.innerWidth * 0.95));
+        newHeight = Math.max(200, Math.min(newHeight, window.innerHeight * 0.8));
+        
+        chatWindow.style.width = newWidth + 'px';
+        chatWindow.style.height = newHeight + 'px';
+      };
+      
+      document.onmouseup = function() {
+        if (isResizing) {
+          isResizing = false;
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          
+          const newSize = {
+            width: parseInt(chatWindow.style.width),
+            height: parseInt(chatWindow.style.height)
+          };
+          setChatWindowSize(newSize);
+        }
+      };
+    }
+    
+    function renderChatMsgs() {
+      let msgs = [];
+      if (currentChatMode === 'group') {
+        msgs = getChatMsgs();
+      } else if (currentPrivateUser) {
+        msgs = getPrivateChatMsgs(currentPrivateUser);
+      }
+      
+      const msgDiv = document.getElementById('chat-messages');
+      msgDiv.innerHTML = msgs.map(m=>{
+        let content = '';
+        if(m.text) content += `<span style='word-break:break-all;'>${m.text}</span>`;
+        if(m.img) content += `<br><img src='${m.img}' style='max-width:120px;max-height:90px;border-radius:8px;cursor:pointer;' class='chat-img'>`;
+        return `<div style='margin-bottom:8px;'><b style='color:#2d8cf0;'>${m.user}</b> <span style='color:#888;font-size:0.9em;'>${m.time}</span><br>${content}</div>`;
+      }).join('');
+      msgDiv.scrollTop = msgDiv.scrollHeight;
+      msgDiv.querySelectorAll('.chat-img').forEach(img=>{
+        img.onclick = function(e){
+          e.stopPropagation();
+          showImgPreview(img.src);
+        };
+      });
+    }
+    function showChatFloat() {
+      document.getElementById('chat-float').style.display = 'block';
+    }
+    function hideChatFloat() {
+      document.getElementById('chat-float').style.display = 'none';
+    }
+    function toggleChatWindow() {
+      const win = document.getElementById('chat-window');
+      const toggle = document.getElementById('chat-toggle');
+      if(win.style.display==='none') { win.style.display='block'; toggle.innerHTML='会员聊天 ▼'; renderChatMsgs(); }
+      else { win.style.display='none'; toggle.innerHTML='会员聊天 ▲'; }
+    }
+    if(getCurrentUser()) {
+      showChatFloat();
+      initChatWindowResize();
+      
+      document.getElementById('group-chat-btn').onclick = function() {
+        switchChatMode('group');
+      };
+      document.getElementById('private-chat-btn').onclick = function() {
+        switchChatMode('private');
+      };
+      
+      document.getElementById('private-user-select').onchange = onPrivateUserChange;
+    }
+    document.getElementById('chat-toggle').onclick = toggleChatWindow;
+    document.getElementById('chat-form').onsubmit = function(e){
+      e.preventDefault();
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if(!text) return;
+      
+      const now = new Date();
+      const timeStr = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
+      const message = {
+        user: getCurrentUser(),
+        time: timeStr,
+        text: text
+      };
+      
+      if (currentChatMode === 'group') {
+        const msgs = getChatMsgs();
+        msgs.push(message);
+        setChatMsgs(msgs.slice(-100));
+      } else if (currentPrivateUser) {
+        const msgs = getPrivateChatMsgs(currentPrivateUser);
+        msgs.push(message);
+        setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+      }
+      
+      input.value = '';
+      renderChatMsgs();
+    };
+    window.addEventListener('storage', function(e){ 
+      if(e.key==='abc_chat_msgs') {
+        if (currentChatMode === 'group') {
+          renderChatMsgs();
+        }
+      } else if (e.key && e.key.startsWith('abc_private_chat_')) {
+        if (currentChatMode === 'private' && currentPrivateUser) {
+          renderChatMsgs();
+        }
+      }
+    });
+    // 表情面板逻辑
+    const emojiBtn = document.getElementById('emoji-btn');
+    const emojiPanel = document.getElementById('emoji-panel');
+    const chatInput = document.getElementById('chat-input');
+    emojiBtn.onclick = function(e) {
+      e.stopPropagation();
+      emojiPanel.style.display = emojiPanel.style.display==='none' ? 'block' : 'none';
+    };
+    document.body.addEventListener('click', function(){ emojiPanel.style.display='none'; });
+    emojiPanel.onclick = function(e){
+      if(e.target.tagName==='SPAN') {
+        insertAtCursor(chatInput, e.target.textContent);
+        emojiPanel.style.display='none';
+        chatInput.focus();
+      }
+    };
+    function insertAtCursor(input, text) {
+      if(document.selection) {
+        input.focus();
+        var sel = document.selection.createRange();
+        sel.text = text;
+      } else if(input.selectionStart || input.selectionStart === 0) {
+        let start = input.selectionStart;
+        let end = input.selectionEnd;
+        input.value = input.value.substring(0, start) + text + input.value.substring(end);
+        input.selectionStart = input.selectionEnd = start + text.length;
+      } else {
+        input.value += text;
+      }
+    }
+    // 图片按钮逻辑
+    const imgBtn = document.getElementById('img-btn');
+    const imgFile = document.getElementById('img-file');
+    imgBtn.onclick = function(){ imgFile.click(); };
+    imgFile.onchange = function(){
+      const file = imgFile.files[0];
+      if(!file) return;
+      if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
+      if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
+      const reader = new FileReader();
+      reader.onload = function(e){
+        sendChatImg(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    };
+    function sendChatImg(imgData) {
+      const now = new Date();
+      const timeStr = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
+      const message = {
+        user: getCurrentUser(),
+        time: timeStr,
+        text: document.getElementById('chat-input').value.trim(),
+        img: imgData
+      };
+      
+      if (currentChatMode === 'group') {
+        const msgs = getChatMsgs();
+        msgs.push(message);
+        setChatMsgs(msgs.slice(-100));
+      } else if (currentPrivateUser) {
+        const msgs = getPrivateChatMsgs(currentPrivateUser);
+        msgs.push(message);
+        setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+      }
+      
+      document.getElementById('chat-input').value = '';
+      renderChatMsgs();
+    }
+    // 图片预览弹窗
+    let imgPreviewDiv = null;
+    function showImgPreview(src) {
+      if(imgPreviewDiv) imgPreviewDiv.remove();
+      imgPreviewDiv = document.createElement('div');
+      imgPreviewDiv.style = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:20000;display:flex;align-items:center;justify-content:center;';
+      imgPreviewDiv.innerHTML = `<img src='${src}' style='max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 4px 24px #000a;'>`;
+      imgPreviewDiv.onclick = function(){ imgPreviewDiv.remove(); };
+      document.body.appendChild(imgPreviewDiv);
+    }
+    // PeerJS 视频通话集成
+    let peer = null, currentCall = null;
+    function setupPeerVideo() {
+      const user = getCurrentUser();
+      if(!user) return;
+      if(peer) return;
+      peer = new Peer(user, { debug: 2 });
+      peer.on('open', id => { });
+      peer.on('call', async call => {
+        if(!confirm('收到视频通话请求，是否接听？')) return;
+        const localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+        document.getElementById('local-video').srcObject = localStream;
+        document.getElementById('video-chat-window').style.display = 'flex';
+        call.answer(localStream);
+        currentCall = call;
+        call.on('stream', remoteStream => {
+          document.getElementById('remote-video').srcObject = remoteStream;
+        });
+        call.on('close', endVideoCall);
+      });
+    }
+    if(getCurrentUser()) setupPeerVideo();
+    const videoBtn = document.getElementById('video-btn');
+    const videoCallModal = document.getElementById('video-call-modal');
+    videoBtn.onclick = function() {
+      videoCallModal.style.display = 'flex';
+    };
+    document.getElementById('video-call-cancel').onclick = function() {
+      videoCallModal.style.display = 'none';
+    };
+    document.getElementById('video-call-start').onclick = async function() {
+      const remoteId = document.getElementById('video-peer-id').value.trim();
+      if(!remoteId) return alert('请输入对方用户名');
+      videoCallModal.style.display = 'none';
+      startVideoCall(remoteId);
+    };
+    async function startVideoCall(remoteId) {
+      const localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      document.getElementById('local-video').srcObject = localStream;
+      document.getElementById('video-chat-window').style.display = 'flex';
+      currentCall = peer.call(remoteId, localStream);
+      currentCall.on('stream', remoteStream => {
+        document.getElementById('remote-video').srcObject = remoteStream;
+      });
+      currentCall.on('close', endVideoCall);
+    }
+    document.getElementById('video-hangup').onclick = endVideoCall;
+    function endVideoCall() {
+      document.getElementById('video-chat-window').style.display = 'none';
+      if(currentCall) currentCall.close();
+      document.getElementById('local-video').srcObject = null;
+      document.getElementById('remote-video').srcObject = null;
+    }
+    // 会员游戏平台功能
+    function getMemberGames() {
+      return JSON.parse(localStorage.getItem('abc_member_games')||'[]');
+    }
+    
+    function setMemberGames(games) {
+      localStorage.setItem('abc_member_games', JSON.stringify(games));
+    }
+    
+    function renderMemberGames() {
+      const games = getMemberGames();
+      const gamesList = document.getElementById('member-games-list');
+      const noGamesMsg = document.getElementById('no-games-msg');
+      
+      if (games.length === 0) {
+        gamesList.style.display = 'none';
+        noGamesMsg.style.display = 'block';
+        return;
+      }
+      
+      gamesList.style.display = 'grid';
+      noGamesMsg.style.display = 'none';
+      
+      gamesList.innerHTML = games.map(game => `
+        <div style="background:#f7faff;border-radius:8px;padding:16px;text-align:center;border:1px solid #e0eafc;">
+          <img src="${game.icon || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjRjBGNUZGIi8+Cjx0ZXh0IHg9IjQwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjMkQ4Q0YwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7lm77niYfliqDovb08L3RleHQ+Cjwvc3ZnPgo='}" 
+               alt="${game.name}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:8px;">
+          <div style="font-weight:bold;margin-bottom:4px;color:#2d8cf0;">${game.name}</div>
+          <div style="font-size:0.9em;color:#666;margin-bottom:8px;line-height:1.3;">${game.description}</div>
+          <div style="font-size:0.8em;color:#888;margin-bottom:8px;">作者: ${game.author}</div>
+          <a href="${game.url}" target="_blank" style="display:inline-block;padding:6px 12px;background:#2d8cf0;color:#fff;text-decoration:none;border-radius:4px;font-size:0.9em;">开始游戏</a>
+        </div>
+      `).join('');
+    }
+    
+    function showMemberGamesPlatform() {
+      if (!getCurrentUser()) {
+        alert('请先登录会员账号');
+        return;
+      }
+      renderMemberGames();
+      document.getElementById('member-games-modal').style.display = 'flex';
+    }
+    
+    function showUploadGameModal() {
+      if (!getCurrentUser()) {
+        alert('请先登录会员账号');
+        return;
+      }
+      document.getElementById('upload-game-modal').style.display = 'flex';
+    }
+    
+    function handleGameUpload(e) {
+      e.preventDefault();
+      
+      const gameName = document.getElementById('game-name').value.trim();
+      const gameDescription = document.getElementById('game-description').value.trim();
+      const gameUrl = document.getElementById('game-url').value.trim();
+      const gameIconFile = document.getElementById('game-icon').files[0];
+      
+      if (!gameName || !gameDescription || !gameUrl) {
+        alert('请填写完整的游戏信息');
+        return;
+      }
+      
+      let iconData = '';
+      if (gameIconFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          iconData = e.target.result;
+          saveGame(gameName, gameDescription, gameUrl, iconData);
+        };
+        reader.readAsDataURL(gameIconFile);
+      } else {
+        saveGame(gameName, gameDescription, gameUrl, iconData);
+      }
+    }
+    
+    function saveGame(name, description, url, icon) {
+      const games = getMemberGames();
+      const newGame = {
+        id: Date.now(),
+        name: name,
+        description: description,
+        url: url,
+        icon: icon,
+        author: getCurrentUser(),
+        uploadTime: new Date().toLocaleString()
+      };
+      
+      games.push(newGame);
+      setMemberGames(games);
+      
+      document.getElementById('upload-game-form').reset();
+      document.getElementById('upload-game-modal').style.display = 'none';
+      
+      alert('游戏上传成功！');
+    }
+    // 通知弹窗逻辑
+    function getNotices() {
+      return JSON.parse(localStorage.getItem('abc_notices')||'[]');
+    }
+    function renderNoticeListView() {
+      const notices = getNotices();
+      const list = document.getElementById('notice-list-view');
+      if(!notices.length) {
+        list.innerHTML = '<div style="color:#888;text-align:center;padding:40px 0;">暂无通知</div>';
+        return;
+      }
+      list.innerHTML = notices.map(n=>`<div style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;'>${n.img?`<img src='${n.img}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;'>`:''}<div style='flex:1;'><div style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
+    }
+    document.getElementById('notice-btn').onclick = function(){
+      renderNoticeListView();
+      document.getElementById('notice-modal').style.display = 'flex';
+    };
+    document.getElementById('notice-close').onclick = function(){
+      document.getElementById('notice-modal').style.display = 'none';
+    };
+    document.getElementById('notice-modal').onclick = function(e){
+      if(e.target===this) this.style.display='none';
+    };
+    // 首页通知横向滚动条
+    function renderNoticeMarquee() {
+      const notices = getNotices();
+      const texts = notices.map(n=>n.text).filter(Boolean);
+      const marquee = document.getElementById('notice-marquee');
+      if(!marquee) return;
+      if(!texts.length) {
+        marquee.textContent = '暂无通知';
+        return;
+      }
+      marquee.textContent = texts.join('    |    ');
+      let pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+      marquee.style.left = pos + 'px';
+      function step() {
+        pos -= 1;
+        marquee.style.left = pos + 'px';
+        if(pos + marquee.offsetWidth < 0) {
+          pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+        }
+        marquee._marqueeTimer = requestAnimationFrame(step);
+      }
+      if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
+      step();
+    }
+    renderNoticeMarquee();
+    window.addEventListener('storage', function(e){
+      if(e.key==='abc_notices') renderNoticeMarquee();
+    });
+    
+    // 更多游戏功能
+    function showMoreGamesModal() {
+      renderMoreGames();
+      document.getElementById('more-games-modal').style.display = 'flex';
+    }
+    
+    function renderMoreGames() {
+      const moreGamesList = document.getElementById('more-games-list');
+      const games = [
+        {
+          name: '太空射击游戏',
+          description: '经典太空射击游戏，消灭外星敌人，保卫地球！',
+          url: '更多/太空射击游戏/太空射击游戏.html',
+          icon: '更多/太空射击游戏/太空射击游戏.png'
+        },
+        {
+          name: '马里奥赛车',
+          description: '经典马里奥赛车游戏，体验速度与激情的竞速乐趣！',
+          url: '更多/马里奥赛车/index.html',
+          icon: '更多/马里奥赛车/马里奥赛车.png'
+        },
+        {
+          name: '酷跑游戏',
+          description: '刺激的跑酷游戏，跳跃、滑行，挑战各种障碍！',
+          url: '更多/酷跑游戏/跑酷游戏.html',
+          icon: '更多/酷跑游戏/酷跑游戏.png'
+        }
+      ];
+      
+      moreGamesList.innerHTML = games.map(game => `
+        <div style="background:#f7faff;border-radius:8px;padding:12px;text-align:center;border:1px solid #e0eafc;transition:transform 0.2s, box-shadow 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-2px) scale(1.01)';this.style.boxShadow='0 2px 8px rgba(156,39,176,0.15)'" onmouseout="this.style.transform='translateY(0) scale(1)';this.style.boxShadow='none'">
+          <img src="${game.icon}" 
+               alt="${game.name}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);">
+          <div style="font-weight:bold;margin-bottom:4px;color:#9c27b0;font-size:1em;">${game.name}</div>
+          <div style="font-size:0.85em;color:#666;margin-bottom:8px;line-height:1.3;">${game.description}</div>
+          <a href="${game.url}" target="_blank" style="display:inline-block;padding:6px 12px;background:#9c27b0;color:#fff;text-decoration:none;border-radius:4px;font-size:0.85em;font-weight:bold;transition:background 0.2s;" onmouseover="this.style.background='#7b1fa2'" onmouseout="this.style.background='#9c27b0'">开始游戏</a>
+        </div>
+      `).join('');
+    }
+    </script>
+</body>
+</html> 
