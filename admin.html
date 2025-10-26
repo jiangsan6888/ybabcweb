@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>延边ABC后台管理</title>
+  <link rel="icon" href="延边ABC Logo.png">
+  <style>
+    body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: #f5f8fc; margin:0; }
+    .admin-header { background:#2d8cf0; color:#fff; padding:24px 0 18px 0; text-align:center; font-size:2em; letter-spacing:2px; }
+    .admin-main { display:flex; max-width:1100px; margin:30px auto; background:#fff; border-radius:16px; box-shadow:0 4px 24px #2d8cf011; min-height:500px; }
+    .admin-menu { width:200px; border-right:1px solid #e0eafc; background:#f7faff; border-radius:16px 0 0 16px; padding:0; }
+    .admin-menu ul { list-style:none; margin:0; padding:0; }
+    .admin-menu li { padding:22px 0 22px 0; text-align:center; font-size:1.15em; color:#2d8cf0; cursor:pointer; border-bottom:1px solid #e0eafc; transition:background 0.2s; }
+    .admin-menu li.active, .admin-menu li:hover { background:#e0eafc; font-weight:bold; }
+    .admin-content { flex:1; padding:36px 32px; }
+    .admin-section { display:none; }
+    .admin-section.active { display:block; }
+    .admin-table { width:100%; border-collapse:collapse; margin-top:18px; }
+    .admin-table th, .admin-table td { border:1px solid #e0eafc; padding:10px 8px; text-align:center; }
+    .admin-table th { background:#f7faff; color:#2d8cf0; }
+    .btn { background:#2d8cf0; color:#fff; border:none; border-radius:6px; padding:5px 16px; cursor:pointer; font-size:1em; }
+    .btn[disabled] { background:#ccc; cursor:not-allowed; }
+    .logout-bar { text-align:right; margin:0 0 18px 0; }
+    .logout-bar button { background:none; border:none; color:#2d8cf0; font-size:1em; cursor:pointer; }
+    textarea { width:100%; min-height:60px; border-radius:6px; border:1px solid #ccc; padding:8px; font-size:1em; }
+    .save-bar { text-align:right; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="admin-header">延边ABC后台管理系统</div>
+    <div id="connection-test-btn" style="position:fixed;top:24px;left:24px;z-index:1000;">
+      <button onclick="runConnectionTest()" style="background:#4caf50;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:0.9em;cursor:pointer;">连接测试</button>
+    </div>
+    <div id="admin-network-status" style="position:fixed;top:24px;right:24px;z-index:1000;padding:8px 12px;border-radius:6px;font-size:0.9em;display:none;">
+      <span id="admin-network-status-text"></span>
+    </div>
+  <div class="admin-main">
+    <nav class="admin-menu">
+      <ul>
+        <li class="active" data-section="member">会员管理</li>
+        <li data-section="ad">广告管理</li>
+        <li data-section="chat">聊天管理</li>
+        <li data-section="notice">通知管理</li>
+      </ul>
+    </nav>
+    <div class="admin-content">
+      <div class="logout-bar"><button id="admin-logout">退出后台</button></div>
+      <div id="section-member" class="admin-section active">
+        <h2>会员管理</h2>
+        <div style="margin-bottom: 10px;">
+          <button id="refresh-members" class="btn" style="background: #4caf50;">刷新会员列表</button>
+        </div>
+        <table class="admin-table" id="member-table">
+          <thead><tr><th>用户名</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="section-ad" class="admin-section">
+        <h2>广告管理</h2>
+        <form id="ad-form">
+          <div style="margin-bottom:14px;">
+            <label>顶部广告：</label>
+            <div id="ad-banner-list"></div>
+            <button type="button" id="add-banner-ad" class="btn" style="margin-top:8px;">新增顶部广告</button>
+          </div>
+          <div style="margin-bottom:14px;">
+            <label>底部广告：</label>
+            <div id="ad-footer-list"></div>
+            <button type="button" id="add-footer-ad" class="btn" style="margin-top:8px;">新增底部广告</button>
+          </div>
+          <div class="save-bar"><button type="submit" class="btn">保存广告</button></div>
+        </form>
+      </div>
+      <div id="section-chat" class="admin-section">
+        <h2>聊天管理</h2>
+        <div style="margin-bottom: 10px;">
+          <button id="refresh-chat" class="btn" style="background: #4caf50; margin-right: 10px;">刷新聊天记录</button>
+          <button id="chat-clear-all" class="btn" style="background: #f44336;">清空全部聊天</button>
+        </div>
+        <table class="admin-table" id="chat-table">
+          <thead><tr><th>用户名</th><th>时间</th><th>内容</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="section-notice" class="admin-section">
+        <h2>通知管理</h2>
+        <form id="notice-form">
+          <div id="notice-list"></div>
+          <button type="button" id="add-notice" class="btn" style="margin-top:8px;">新增通知</button>
+          <div class="save-bar"><button type="submit" class="btn">保存通知</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/@supabase/supabase-js@2" onerror="console.warn('Supabase CDN加载失败，系统将使用本地存储模式')"></script>
+  <script>
+    // Supabase配置
+    const SUPABASE_URL = 'https://rfbjjgzmdtmvjxfbmvpm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmYmpqZ3ptZHRtdmp4ZmJtdnBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyOTA1NjIsImV4cCI6MjA3Njg2NjU2Mn0.-WrayfzkBmfFWmEplWRI6RmxdZBGwU2H286QafsMQf0';
+    
+    // 初始化Supabase客户端（如果可用）
+    let supabaseClient = null;
+    try {
+      if (typeof supabase !== 'undefined') {
+        const { createClient } = supabase;
+        supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase客户端初始化成功');
+      } else {
+        console.warn('Supabase库未加载，系统将使用本地存储模式');
+      }
+    } catch (error) {
+      console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
+    }
+    
+    // 管理员权限验证
+    async function checkAdminAuth() {
+      const currentUser = localStorage.getItem('abc_current_user');
+      if (currentUser !== 'admin') {
+        alert('仅管理员可访问后台！');
+        location.href = 'index.html';
+        return false;
+      }
+      
+      // 简化验证：只检查本地存储中的用户
+      // 如果用户名为admin，则允许访问后台
+      console.log('管理员身份验证通过，欢迎使用后台管理系统！');
+      return true;
+    }
+    
+    // 网络连接检测和状态显示
+    function updateAdminNetworkStatus() {
+      const statusDiv = document.getElementById('admin-network-status');
+      const statusText = document.getElementById('admin-network-status-text');
+      
+      if (!navigator.onLine) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#f44336';
+        statusDiv.style.color = '#fff';
+        statusText.textContent = '网络连接已断开';
+        console.warn('网络连接已断开，请检查您的网络连接或VPN设置');
+        return false;
+      } else {
+        statusDiv.style.display = 'none';
+        return true;
+      }
+    }
+    
+    function checkNetworkConnection() {
+      const isOnline = updateAdminNetworkStatus();
+      
+      if (isOnline) {
+        // 检测Supabase连接
+        fetch('https://rfbjjgzmdtmvjxfbmvpm.supabase.co/rest/v1/', {
+          method: 'HEAD',
+          mode: 'no-cors'
+        }).catch(() => {
+          console.warn('Supabase连接检测失败，但系统仍可正常使用（使用本地存储）');
+        });
+      }
+      
+      return isOnline;
+    }
+    
+    // 监听网络状态变化
+    window.addEventListener('online', updateAdminNetworkStatus);
+    window.addEventListener('offline', updateAdminNetworkStatus);
+    
+    // 错误诊断和恢复系统
+    function diagnoseConnectionError(error) {
+      const errorMessage = error.toString().toLowerCase();
+      let diagnosis = '';
+      let solution = '';
+      
+      if (errorMessage.includes('resource_exhausted')) {
+        diagnosis = '资源耗尽错误';
+        solution = '服务器资源不足，请稍后重试或检查VPN设置';
+      } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+        diagnosis = '网络连接错误';
+        solution = '请检查网络连接或VPN设置';
+      } else if (errorMessage.includes('timeout')) {
+        diagnosis = '连接超时';
+        solution = '网络响应缓慢，请检查网络速度或VPN设置';
+      } else if (errorMessage.includes('cors')) {
+        diagnosis = '跨域请求错误';
+        solution = '浏览器安全策略阻止了请求';
+      } else {
+        diagnosis = '未知连接错误';
+        solution = '请检查网络连接和VPN设置';
+      }
+      
+      return { diagnosis, solution };
+    }
+    
+    // 显示错误诊断信息
+    function showErrorDiagnosis(error) {
+      const { diagnosis, solution } = diagnoseConnectionError(error);
+      const errorMsg = `连接错误诊断：\n\n错误类型：${diagnosis}\n\n建议解决方案：\n${solution}\n\n系统将自动切换到离线模式，所有功能仍可正常使用。`;
+      alert(errorMsg);
+      console.error('连接错误详情:', error);
+    }
+    
+    // 全局错误捕获
+    window.addEventListener('error', function(event) {
+      if (event.error && event.error.toString().includes('resource_exhausted')) {
+        showErrorDiagnosis(event.error);
+      }
+    });
+    
+    // 未处理的Promise拒绝捕获
+    window.addEventListener('unhandledrejection', function(event) {
+      if (event.reason && event.reason.toString().includes('resource_exhausted')) {
+        showErrorDiagnosis(event.reason);
+        event.preventDefault(); // 阻止默认的错误处理
+      }
+    });
+    
+    // 连接测试功能
+    async function runConnectionTest() {
+      const testBtn = document.querySelector('#connection-test-btn button');
+      const originalText = testBtn.textContent;
+      testBtn.textContent = '测试中...';
+      testBtn.disabled = true;
+      
+      const results = [];
+      
+      // 测试基本网络连接
+      try {
+        const startTime = Date.now();
+        await fetch('https://www.google.com/favicon.ico', { 
+          method: 'HEAD', 
+          mode: 'no-cors',
+          cache: 'no-cache'
+        });
+        const responseTime = Date.now() - startTime;
+        results.push(`✓ 基本网络连接正常 (${responseTime}ms)`);
+      } catch (error) {
+        results.push(`✗ 基本网络连接失败: ${error.message}`);
+      }
+      
+      // 测试Supabase连接
+      try {
+        const startTime = Date.now();
+        await fetch('https://rfbjjgzmdtmvjxfbmvpm.supabase.co/rest/v1/', {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache'
+        });
+        const responseTime = Date.now() - startTime;
+        results.push(`✓ Supabase服务连接正常 (${responseTime}ms)`);
+      } catch (error) {
+        results.push(`✗ Supabase服务连接失败: ${error.message}`);
+      }
+      
+      // 测试CDN资源
+      try {
+        const startTime = Date.now();
+        await fetch('https://unpkg.com/@supabase/supabase-js@2', {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache'
+        });
+        const responseTime = Date.now() - startTime;
+        results.push(`✓ CDN资源访问正常 (${responseTime}ms)`);
+      } catch (error) {
+        results.push(`✗ CDN资源访问失败: ${error.message}`);
+      }
+      
+      // 显示测试结果
+      const resultText = `网络连接测试结果：\n\n${results.join('\n')}\n\n建议：\n${results.some(r => r.includes('✗')) ? 
+        '• 检查网络连接\n• 尝试更换VPN服务器\n• 检查防火墙设置\n• 稍后重试' : 
+        '• 网络连接正常，如仍有问题请刷新页面'}`;
+      
+      alert(resultText);
+      
+      testBtn.textContent = originalText;
+      testBtn.disabled = false;
+    }
+    
+    // 页面加载时验证权限和网络
+    checkNetworkConnection();
+    checkAdminAuth();
+    // 菜单切换
+    document.querySelectorAll('.admin-menu li').forEach(li=>{
+      li.onclick = function(){
+        document.querySelectorAll('.admin-menu li').forEach(x=>x.classList.remove('active'));
+        li.classList.add('active');
+        document.querySelectorAll('.admin-section').forEach(x=>x.classList.remove('active'));
+        document.getElementById('section-'+li.dataset.section).classList.add('active');
+      };
+    });
+    // 会员管理 - 使用localStorage（与主页保持一致）
+    function getUsers() {
+      return JSON.parse(localStorage.getItem('abc_users')||'{}');
+    }
+    
+    function setUsers(users) {
+      localStorage.setItem('abc_users', JSON.stringify(users));
+    }
+    
+    function renderMembers() {
+      const users = getUsers();
+      const tbody = document.querySelector('#member-table tbody');
+      tbody.innerHTML = '';
+      
+      // 过滤掉admin用户
+      const memberUsers = Object.keys(users).filter(username => username !== 'admin');
+      
+      if (memberUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#888;">暂无会员数据</td></tr>';
+        return;
+      }
+      
+      memberUsers.forEach((username, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${username}</td>
+          <td>
+            <button class='btn' onclick='deleteMember(${index}, "${username}")'>删除</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    
+    // 删除会员
+    function deleteMember(memberIndex, username) {
+      if (!confirm(`确定要删除会员 ${username} 吗？`)) {
+        return;
+      }
+      
+      const users = getUsers();
+      const usernames = Object.keys(users);
+      const targetUsername = usernames[memberIndex];
+      
+      if (targetUsername && targetUsername !== 'admin') {
+        delete users[targetUsername];
+        setUsers(users);
+        alert('会员删除成功！');
+        renderMembers();
+      } else {
+        alert('删除失败，请重试');
+      }
+    }
+    
+    // 页面加载时渲染会员列表
+    renderMembers();
+    
+    // 添加实时刷新功能
+    function refreshAllData() {
+      renderMembers();
+      renderChatTable();
+    }
+    
+    // 监听localStorage变化，自动刷新数据
+    window.addEventListener('storage', function(e) {
+      if (e.key === 'abc_users') {
+        renderMembers();
+      } else if (e.key === 'abc_chat_msgs') {
+        renderChatTable();
+      }
+    });
+    
+    // 每30秒自动刷新一次数据
+    setInterval(refreshAllData, 30000);
+    
+    // 手动刷新按钮事件
+    document.getElementById('refresh-members').onclick = function() {
+      renderMembers();
+      alert('会员列表已刷新！');
+    };
+    
+    document.getElementById('refresh-chat').onclick = function() {
+      renderChatTable();
+      alert('聊天记录已刷新！');
+    };
+    // 广告管理 - 使用localStorage（与主页保持一致）
+    function getAdData() {
+      const raw = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
+      const normalizeArr = (arr)=> (arr||[]).map(item=>{
+        if(typeof item === 'string') { return { text: item, imgs: [] }; }
+        if(item && typeof item === 'object') {
+          return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
+        }
+        return { text: '', imgs: [] };
+      });
+      return { banner: normalizeArr(raw.banner), footer: normalizeArr(raw.footer) };
+    }
+    
+    function setAdData(data) {
+      localStorage.setItem('abc_ads', JSON.stringify(data));
+    }
+    function createAdItem(ad, type, idx) {
+      // type: 'banner' or 'footer'
+      return `<div class="ad-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+        <textarea placeholder="广告文字" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${ad.text||''}</textarea>
+        <div class="ad-imgs" style="display:flex;gap:8px;margin:8px 0 0 0;flex-wrap:wrap;">
+          ${(ad.imgs||[]).map((img,i)=>`<div style='position:relative;display:inline-block;'><img src='${img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-type='${type}' data-adidx='${idx}' data-imgidx='${i}' class='del-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`).join('')}
+          ${(ad.imgs||[]).length<3?`<label style='width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;border:1px dashed #2d8cf0;border-radius:6px;cursor:pointer;background:#f7faff;'><span style='font-size:2em;color:#2d8cf0;'>+</span><input type='file' accept='image/*' style='display:none;'></label>`:''}
+        </div>
+        <button type="button" class="btn del-ad-btn" data-type="${type}" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
+      </div>`;
+    }
+    async function renderAdForm() {
+      try {
+        const adData = await getAdData();
+        const bannerList = document.getElementById('ad-banner-list');
+        const footerList = document.getElementById('ad-footer-list');
+        bannerList.innerHTML = (adData.banner||[]).map((ad,i)=>createAdItem(ad,'banner',i)).join('');
+        footerList.innerHTML = (adData.footer||[]).map((ad,i)=>createAdItem(ad,'footer',i)).join('');
+      } catch (err) {
+        console.error('渲染广告表单失败:', err);
+      }
+    }
+    renderAdForm();
+    // 事件委托：图片上传、删除、广告删除
+    document.getElementById('ad-banner-list').onclick = document.getElementById('ad-footer-list').onclick = function(e) {
+      const target = e.target;
+      // 删除图片
+      if(target.classList.contains('del-img-btn')) {
+        const type = target.dataset.type, adidx = +target.dataset.adidx, imgidx = +target.dataset.imgidx;
+        const adData = getAdData();
+        adData[type][adidx].imgs.splice(imgidx,1);
+        setAdData(adData);
+        renderAdForm();
+        return;
+      }
+      // 删除广告
+      if(target.classList.contains('del-ad-btn')) {
+        const type = target.dataset.type, idx = +target.dataset.idx;
+        const adData = getAdData();
+        adData[type].splice(idx,1);
+        setAdData(adData);
+        renderAdForm();
+        return;
+      }
+    };
+    // 图片上传
+    document.getElementById('ad-banner-list').addEventListener('change', handleImgUpload, true);
+    document.getElementById('ad-footer-list').addEventListener('change', handleImgUpload, true);
+    function handleImgUpload(e) {
+      const input = e.target;
+      if(input.type==='file' && input.files && input.files[0]) {
+        const parent = input.closest('.ad-item');
+        const type = parent.parentElement.id==='ad-banner-list'?'banner':'footer';
+        const idx = Array.from(parent.parentElement.children).indexOf(parent);
+        const file = input.files[0];
+        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
+        if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
+        const reader = new FileReader();
+        reader.onload = function(ev){
+          const adData = getAdData();
+          adData[type][idx].imgs = adData[type][idx].imgs||[];
+          if(adData[type][idx].imgs.length>=3) return;
+          adData[type][idx].imgs.push(ev.target.result);
+          setAdData(adData);
+          renderAdForm();
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    // 文字输入
+    document.getElementById('ad-banner-list').addEventListener('input', handleTextInput, true);
+    document.getElementById('ad-footer-list').addEventListener('input', handleTextInput, true);
+    function handleTextInput(e) {
+      if(e.target.tagName==='TEXTAREA') {
+        const parent = e.target.closest('.ad-item');
+        const type = parent.parentElement.id==='ad-banner-list'?'banner':'footer';
+        const idx = Array.from(parent.parentElement.children).indexOf(parent);
+        const adData = getAdData();
+        adData[type][idx].text = e.target.value;
+        setAdData(adData);
+      }
+    }
+    // 新增广告
+    document.getElementById('add-banner-ad').onclick = function() {
+      const adData = getAdData();
+      adData.banner.push({text:'',imgs:[]});
+      setAdData(adData);
+      renderAdForm();
+    };
+    document.getElementById('add-footer-ad').onclick = function() {
+      const adData = getAdData();
+      adData.footer.push({text:'',imgs:[]});
+      setAdData(adData);
+      renderAdForm();
+    };
+    // 保存广告（清理空广告项并写回）
+    document.getElementById('ad-form').onsubmit = function(e){
+      e.preventDefault();
+      const data = getAdData();
+      const clean = (arr)=> (arr||[]).filter(it=>{
+        const hasText = (it && typeof it.text==='string' && it.text.trim().length>0);
+        const hasImgs = (it && it.imgs && it.imgs.length>0);
+        return hasText || hasImgs;
+      });
+      const newData = { banner: clean(data.banner), footer: clean(data.footer) };
+      setAdData(newData);
+      alert('广告已保存！');
+    };
+    // 退出后台
+    document.getElementById('admin-logout').onclick = function(){
+      location.href='index.html';
+    };
+    // 聊天管理功能 - 使用localStorage（与主页保持一致）
+    function getChatMsgs() {
+      return JSON.parse(localStorage.getItem('abc_chat_msgs')||'[]');
+    }
+    
+    function setChatMsgs(msgs) {
+      localStorage.setItem('abc_chat_msgs', JSON.stringify(msgs));
+    }
+    
+    function deleteChatMessage(messageId) {
+      const msgs = getChatMsgs();
+      const filteredMsgs = msgs.filter((msg, index) => index !== messageId);
+      setChatMsgs(filteredMsgs);
+    }
+    
+    function renderChatTable() {
+      const msgs = getChatMsgs();
+      const tbody = document.querySelector('#chat-table tbody');
+      tbody.innerHTML = '';
+      
+      if (!msgs || msgs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">暂无聊天记录</td></tr>';
+        return;
+      }
+      
+      msgs.forEach((msg, index) => {
+        let content = '';
+        if (msg.text) content += `<span style='word-break:break-all;'>${msg.text}</span>`;
+        if (msg.img) content += `<br><img src='${msg.img}' style='max-width:90px;max-height:60px;border-radius:6px;margin-top:4px;'>`;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${msg.user}</td>
+          <td>${msg.time}</td>
+          <td style='text-align:left;'>${content}</td>
+          <td><button class='btn' onclick='deleteChatMsg(${index})'>删除</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    
+    function deleteChatMsg(messageId) {
+      if (!confirm('确定要删除这条消息吗？')) {
+        return;
+      }
+      
+      deleteChatMessage(messageId);
+      alert('消息删除成功！');
+      renderChatTable();
+    }
+    // 聊天管理区切换时刷新
+    const chatMenuLi = document.querySelector('li[data-section="chat"]');
+    chatMenuLi.addEventListener('click', renderChatTable);
+    // 页面初始如果就在聊天管理区，也要渲染一次
+    if(chatMenuLi.classList.contains('active')) renderChatTable();
+    // 清空全部聊天
+    const chatClearBtn = document.getElementById('chat-clear-all');
+    chatClearBtn.onclick = function(){
+      if(confirm('确定要清空全部聊天记录吗？')){
+        setChatMsgs([]);
+        renderChatTable();
+        alert('聊天记录已清空！');
+      }
+    };
+    // 监听聊天内容变化，自动刷新
+    window.addEventListener('storage', function(e){
+      if(e.key==='abc_chat_msgs' && document.getElementById('section-chat').classList.contains('active')) {
+        renderChatTable();
+      }
+    });
+
+    // 通知管理 - 使用localStorage（与主页保持一致）
+    function getNotices() {
+      return JSON.parse(localStorage.getItem('abc_notices')||'[]');
+    }
+    
+    function setNotices(data) {
+      localStorage.setItem('abc_notices', JSON.stringify(data));
+    }
+    function createNoticeItem(notice, idx) {
+      return `<div class="notice-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+        <textarea placeholder="通知内容" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${notice.text||''}</textarea>
+        <div style="margin:8px 0 0 0;display:flex;align-items:center;gap:8px;">
+          ${notice.img?`<div style='position:relative;display:inline-block;'><img src='${notice.img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-idx='${idx}' class='del-notice-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`:''}
+          ${!notice.img?`<label style='width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;border:1px dashed #2d8cf0;border-radius:6px;cursor:pointer;background:#f7faff;position:relative;'><span style='font-size:2em;color:#2d8cf0;'>+</span><input type='file' accept='image/*' style='display:block;opacity:0;position:absolute;left:0;top:0;width:100%;height:100%;cursor:pointer;'></label>`:''}
+        </div>
+        <div style="font-size:0.9em;color:#888;margin-top:4px;">${notice.time||''}</div>
+        <button type="button" class="btn del-notice-btn" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
+      </div>`;
+    }
+    function renderNoticeForm() {
+      const notices = getNotices();
+      const list = document.getElementById('notice-list');
+      list.innerHTML = notices.map((n,i)=>createNoticeItem(n,i)).join('');
+    }
+    // 事件委托：图片上传、删除、通知删除
+    document.getElementById('notice-list').onclick = function(e) {
+      const target = e.target;
+      // 删除图片
+      if(target.classList.contains('del-notice-img-btn')) {
+        const idx = +target.dataset.idx;
+        const notices = getNotices();
+        notices[idx].img = '';
+        setNotices(notices);
+        renderNoticeForm();
+        return;
+      }
+      // 删除通知
+      if(target.classList.contains('del-notice-btn')) {
+        const idx = +target.dataset.idx;
+        const notices = getNotices();
+        notices.splice(idx,1);
+        setNotices(notices);
+        renderNoticeForm();
+        return;
+      }
+    };
+    // 图片上传
+    document.getElementById('notice-list').addEventListener('change', function(e) {
+      const input = e.target;
+      if(input.type==='file' && input.files && input.files[0]) {
+        const parent = input.closest('.notice-item');
+        const items = Array.from(parent.parentElement.querySelectorAll('.notice-item'));
+        const idx = items.indexOf(parent);
+        const file = input.files[0];
+        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
+        if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
+        const reader = new FileReader();
+        reader.onload = function(ev){
+          const notices = getNotices();
+          notices[idx].img = ev.target.result;
+          setNotices(notices);
+          renderNoticeForm();
+        };
+        reader.readAsDataURL(file);
+      }
+    }, true);
+    // 文字输入
+    document.getElementById('notice-list').addEventListener('input', function(e) {
+      if(e.target.tagName==='TEXTAREA') {
+        const parent = e.target.closest('.notice-item');
+        const items = Array.from(parent.parentElement.querySelectorAll('.notice-item'));
+        const idx = items.indexOf(parent);
+        const notices = getNotices();
+        notices[idx].text = e.target.value;
+        setNotices(notices);
+      }
+    }, true);
+    // 新增通知
+    document.getElementById('add-notice').onclick = function() {
+      const notices = getNotices();
+      const now = new Date();
+      const time = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
+      notices.unshift({text:'',img:'',time});
+      setNotices(notices);
+      renderNoticeForm();
+    };
+    // 保存通知
+    document.getElementById('notice-form').onsubmit = function(e){
+      e.preventDefault();
+      const notices = getNotices();
+      setNotices(notices);
+      alert('通知已保存！');
+    };
+    const noticeMenuLi = document.querySelector('li[data-section="notice"]');
+    noticeMenuLi.addEventListener('click', renderNoticeForm);
+  </script>
+</body>
+</html> 

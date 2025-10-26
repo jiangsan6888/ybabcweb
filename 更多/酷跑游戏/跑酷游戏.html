@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星空跑酷者 - 带音效</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+        }
+        h1 {
+            color: #fff;
+            text-shadow: 0 0 10px #ff8c00;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        #gameCanvas {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+        }
+        #scoreDisplay {
+            color: white;
+            font-size: 1.5em;
+            margin: 15px 0;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            width: 80%;
+            text-align: center;
+        }
+        #instructions {
+            color: #fff;
+            text-align: center;
+            margin-top: 15px;
+            line-height: 1.5;
+            max-width: 500px;
+        }
+        .highlight {
+            color: #ff8c00;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        button {
+            background: linear-gradient(to bottom, #ff8c00, #ff5500);
+            border: none;
+            border-radius: 50px;
+            padding: 12px 25px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
+        button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        #musicToggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            margin-top: 15px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background: linear-gradient(to right, #ff8c00, #ff5500);
+        }
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            margin-top: 10px;
+        }
+        .volume-slider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 8px;
+            border-radius: 4px;
+            background: #ddd;
+            outline: none;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ff8c00;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <h1>星空跑酷者</h1>
+        <div id="scoreDisplay">得分: 0</div>
+        <div id="gameCanvas"></div>
+        <div class="controls">
+            <button id="startBtn">开始游戏</button>
+            <button id="restartBtn">重新开始</button>
+        </div>
+        <div id="musicToggle">
+            <span>背景音乐:</span>
+            <label class="switch">
+                <input type="checkbox" id="musicToggleCheckbox" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="volume-control">
+            <span>音量:</span>
+            <input type="range" min="0" max="100" value="70" class="volume-slider" id="volumeSlider">
+        </div>
+        <div id="instructions">
+            <p>按 <span class="highlight">空格键</span> 或 <span class="highlight">点击屏幕</span> 跳跃</p>
+            <p>避开障碍物，尽可能获得高分！</p>
+        </div>
+    </div>
+
+    <script>
+        let player;
+        let obstacles = [];
+        let score = 0;
+        let gameSpeed = 5;
+        let gravity;
+        let gameOver = false;
+        let particles = [];
+        let stars = [];
+        let groundY;
+        let canvas;
+        let audioContext;
+        let musicEnabled = true;
+        let volume = 0.7;
+        let gameStarted = false;
+        let backgroundMusicNode;
+        let backgroundMusicOscillator;
+        let backgroundMusicPlaying = false;
+
+        function setup() {
+            canvas = createCanvas(800, 400);
+            canvas.parent('gameCanvas');
+            
+            // 初始化音频上下文
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.error('Web Audio API is not supported in this browser');
+            }
+            
+            groundY = height * 0.8;
+            gravity = createVector(0, 0.5);
+            
+            player = {
+                pos: createVector(80, groundY - 40),
+                vel: createVector(0, 0),
+                size: 40,
+                jumpForce: -12,
+                isJumping: false,
+                color: [255, 140, 0],
+                
+                jump: function() {
+                    if (!this.isJumping && gameStarted) {
+                        this.vel.y = this.jumpForce;
+                        this.isJumping = true;
+                        playJumpSound();
+                        
+                        // 添加跳跃粒子效果
+                        for (let i = 0; i < 10; i++) {
+                            particles.push(new Particle(
+                                this.pos.x, 
+                                groundY, 
+                                random(-2, 2), 
+                                random(-5, -2),
+                                [255, 200, 100],
+                                20
+                            ));
+                        }
+                    }
+                },
+                
+                update: function() {
+                    // 应用重力
+                    this.vel.add(gravity);
+                    this.pos.add(this.vel);
+                    
+                    // 地面碰撞检测
+                    if (this.pos.y > groundY - this.size/2) {
+                        this.pos.y = groundY - this.size/2;
+                        this.vel.y = 0;
+                        this.isJumping = false;
+                    }
+                },
+                
+                draw: function() {
+                    // 绘制玩家
+                    push();
+                    translate(this.pos.x, this.pos.y);
+                    
+                    // 身体
+                    fill(this.color[0], this.color[1], this.color[2]);
+                    noStroke();
+                    ellipse(0, 0, this.size, this.size);
+                    
+                    // 眼睛
+                    fill(255);
+                    ellipse(-8, -5, 12, 12);
+                    ellipse(8, -5, 12, 12);
+                    
+                    fill(0);
+                    ellipse(-8, -5, 6, 6);
+                    ellipse(8, -5, 6, 6);
+                    
+                    // 嘴巴
+                    stroke(0);
+                    strokeWeight(2);
+                    noFill();
+                    arc(0, 5, 15, 10, 0, PI);
+                    
+                    // 动画效果 - 跑步时的上下移动
+                    if (!this.isJumping && gameStarted) {
+                        let offsetY = sin(frameCount * 0.2) * 3;
+                        translate(0, offsetY);
+                    }
+                    
+                    pop();
+                }
+            };
+            
+            // 创建星空背景
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: random(width),
+                    y: random(groundY),
+                    size: random(1, 3),
+                    brightness: random(100, 255)
+                });
+            }
+            
+            // 设置按钮事件监听
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('restartBtn').addEventListener('click', resetGame);
+            document.getElementById('musicToggleCheckbox').addEventListener('change', toggleMusic);
+            document.getElementById('volumeSlider').addEventListener('input', updateVolume);
+            
+            // 初始化游戏为未开始状态
+            noLoop();
+        }
+
+        function draw() {
+            // 绘制星空背景
+            background(10, 20, 40);
+            
+            // 绘制星星
+            for (let star of stars) {
+                fill(255, 255, 255, star.brightness);
+                noStroke();
+                ellipse(star.x, star.y, star.size, star.size);
+                
+                // 让星星闪烁
+                star.brightness += random(-5, 5);
+                star.brightness = constrain(star.brightness, 100, 255);
+            }
+            
+            // 绘制远山
+            drawMountains();
+            
+            // 绘制地面
+            fill(40, 30, 20);
+            noStroke();
+            rect(0, groundY, width, height - groundY);
+            
+            // 绘制地面纹理
+            fill(60, 50, 40);
+            for (let i = 0; i < width; i += 30) {
+                rect(i, groundY, 10, 5);
+            }
+            
+            if (gameStarted && !gameOver) {
+                // 更新玩家
+                player.update();
+                
+                // 生成障碍物
+                if (frameCount % 100 === 0) {
+                    generateObstacle();
+                }
+                
+                // 更新障碍物
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].update();
+                    obstacles[i].draw();
+                    
+                    // 碰撞检测
+                    if (checkCollision(player, obstacles[i])) {
+                        gameOver = true;
+                        playCollisionSound();
+                        
+                        // 添加碰撞粒子效果
+                        for (let j = 0; j < 30; j++) {
+                            particles.push(new Particle(
+                                player.pos.x, 
+                                player.pos.y, 
+                                random(-5, 5), 
+                                random(-5, 5),
+                                player.color,
+                                50
+                            ));
+                        }
+                    }
+                    
+                    // 移除屏幕外的障碍物并增加分数
+                    if (obstacles[i].pos.x + obstacles[i].width < 0) {
+                        obstacles.splice(i, 1);
+                        score++;
+                        document.getElementById('scoreDisplay').textContent = `得分: ${score}`;
+                        
+                        // 每得5分增加游戏速度
+                        if (score % 5 === 0) {
+                            gameSpeed += 0.5;
+                            playScoreSound();
+                        }
+                    }
+                }
+                
+                // 绘制玩家
+                player.draw();
+            } else if (gameOver) {
+                // 游戏结束画面
+                fill(0, 0, 0, 150);
+                rect(0, 0, width, height);
+                
+                fill(255);
+                textSize(40);
+                textAlign(CENTER, CENTER);
+                text("游戏结束", width/2, height/2 - 40);
+                
+                textSize(24);
+                text(`最终得分: ${score}`, width/2, height/2 + 10);
+                
+                textSize(20);
+                text("按R键重新开始", width/2, height/2 + 60);
+            } else {
+                // 游戏开始前画面
+                fill(0, 0, 0, 150);
+                rect(0, 0, width, height);
+                
+                fill(255);
+                textSize(40);
+                textAlign(CENTER, CENTER);
+                text("星空跑酷者", width/2, height/2 - 40);
+                
+                textSize(24);
+                text("点击开始按钮开始游戏", width/2, height/2 + 10);
+            }
+            
+            // 更新和绘制粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                
+                if (particles[i].alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function drawMountains() {
+            // 绘制远山
+            noStroke();
+            fill(30, 40, 70);
+            beginShape();
+            vertex(0, groundY);
+            for (let i = 0; i < width; i += 20) {
+                vertex(i, groundY - noise(i * 0.005, frameCount * 0.005) * 60);
+            }
+            vertex(width, groundY);
+            endShape(CLOSE);
+            
+            // 绘制中景山
+            fill(40, 50, 90);
+            beginShape();
+            vertex(0, groundY);
+            for (let i = 0; i < width; i += 15) {
+                vertex(i, groundY - noise(i * 0.01, frameCount * 0.003) * 40);
+            }
+            vertex(width, groundY);
+            endShape(CLOSE);
+            
+            // 绘制近山
+            fill(50, 60, 110);
+            beginShape();
+            vertex(0, groundY);
+            for (let i = 0; i < width; i += 10) {
+                vertex(i, groundY - noise(i * 0.02, frameCount * 0.001) * 30);
+            }
+            vertex(width, groundY);
+            endShape(CLOSE);
+        }
+        
+        function generateObstacle() {
+            let type = floor(random(3));
+            let obstacle;
+            
+            switch(type) {
+                case 0: // 低障碍物
+                    obstacle = {
+                        pos: createVector(width, groundY - 20),
+                        width: 30,
+                        height: 40,
+                        color: [200, 50, 50],
+                        update: function() {
+                            this.pos.x -= gameSpeed;
+                        },
+                        draw: function() {
+                            fill(this.color[0], this.color[1], this.color[2]);
+                            rect(this.pos.x, this.pos.y - this.height, this.width, this.height);
+                            
+                            // 添加尖刺
+                            fill(220, 70, 70);
+                            triangle(
+                                this.pos.x, this.pos.y - this.height,
+                                this.pos.x + this.width/2, this.pos.y - this.height - 15,
+                                this.pos.x + this.width, this.pos.y - this.height
+                            );
+                        }
+                    };
+                    break;
+                    
+                case 1: // 高障碍物
+                    obstacle = {
+                        pos: createVector(width, groundY - 60),
+                        width: 25,
+                        height: 80,
+                        color: [50, 150, 200],
+                        update: function() {
+                            this.pos.x -= gameSpeed;
+                        },
+                        draw: function() {
+                            fill(this.color[0], this.color[1], this.color[2]);
+                            rect(this.pos.x, this.pos.y - this.height, this.width, this.height);
+                            
+                            // 添加顶部装饰
+                            fill(70, 170, 220);
+                            rect(this.pos.x - 5, this.pos.y - this.height, this.width + 10, 10);
+                        }
+                    };
+                    break;
+                    
+                case 2: // 飞行障碍物
+                    obstacle = {
+                        pos: createVector(width, groundY - 150 - random(50)),
+                        width: 40,
+                        height: 20,
+                        color: [150, 50, 200],
+                        update: function() {
+                            this.pos.x -= gameSpeed;
+                            this.pos.y += sin(frameCount * 0.1) * 1.5;
+                        },
+                        draw: function() {
+                            fill(this.color[0], this.color[1], this.color[2]);
+                            ellipse(this.pos.x + this.width/2, this.pos.y, this.width, this.height);
+                            
+                            // 添加翅膀
+                            fill(170, 70, 220);
+                            ellipse(this.pos.x + this.width/2 - 15, this.pos.y - 5, 15, 10);
+                            ellipse(this.pos.x + this.width/2 + 15, this.pos.y - 5, 15, 10);
+                        }
+                    };
+                    break;
+            }
+            
+            obstacles.push(obstacle);
+        }
+        
+        function checkCollision(player, obstacle) {
+            // 简化的碰撞检测
+            let playerRight = player.pos.x + player.size/2;
+            let playerLeft = player.pos.x - player.size/2;
+            let playerBottom = player.pos.y + player.size/2;
+            let playerTop = player.pos.y - player.size/2;
+            
+            let obstacleRight = obstacle.pos.x + obstacle.width;
+            let obstacleLeft = obstacle.pos.x;
+            let obstacleBottom = obstacle.pos.y;
+            let obstacleTop = obstacle.pos.y - obstacle.height;
+            
+            return playerRight > obstacleLeft && 
+                   playerLeft < obstacleRight && 
+                   playerBottom > obstacleTop && 
+                   playerTop < obstacleBottom;
+        }
+        
+        function keyPressed() {
+            if (key === ' ' && !gameOver && gameStarted) {
+                player.jump();
+            }
+            
+            if (key === 'r' || key === 'R') {
+                resetGame();
+            }
+        }
+        
+        function mousePressed() {
+            if (!gameOver && gameStarted) {
+                player.jump();
+            } else if (gameOver && mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+                resetGame();
+            }
+        }
+        
+        function startGame() {
+            if (!gameStarted) {
+                gameStarted = true;
+                loop();
+                playBackgroundMusic();
+            }
+        }
+        
+        function resetGame() {
+            obstacles = [];
+            particles = [];
+            score = 0;
+            gameSpeed = 5;
+            gameOver = false;
+            gameStarted = true;
+            player.pos.y = groundY - 40;
+            player.vel.y = 0;
+            player.isJumping = false;
+            document.getElementById('scoreDisplay').textContent = `得分: ${score}`;
+            loop();
+            playBackgroundMusic();
+        }
+        
+        function toggleMusic() {
+            musicEnabled = !musicEnabled;
+            if (musicEnabled) {
+                playBackgroundMusic();
+            } else {
+                stopBackgroundMusic();
+            }
+        }
+        
+        function updateVolume() {
+            volume = document.getElementById('volumeSlider').value / 100;
+        }
+        
+        function playBackgroundMusic() {
+            if (musicEnabled && audioContext && !backgroundMusicPlaying) {
+                // 创建低音背景音乐
+                backgroundMusicOscillator = audioContext.createOscillator();
+                backgroundMusicOscillator.type = 'sine';
+                backgroundMusicOscillator.frequency.setValueAtTime(110, audioContext.currentTime);
+                
+                // 创建增益节点控制音量
+                backgroundMusicNode = audioContext.createGain();
+                backgroundMusicNode.gain.value = volume * 0.2;
+                
+                // 连接节点
+                backgroundMusicOscillator.connect(backgroundMusicNode);
+                backgroundMusicNode.connect(audioContext.destination);
+                
+                // 开始播放
+                backgroundMusicOscillator.start();
+                backgroundMusicPlaying = true;
+            }
+        }
+        
+        function stopBackgroundMusic() {
+            if (backgroundMusicPlaying) {
+                backgroundMusicOscillator.stop();
+                backgroundMusicPlaying = false;
+            }
+        }
+        
+        function playJumpSound() {
+            if (musicEnabled && audioContext) {
+                // 创建跳跃音效
+                const oscillator = audioContext.createOscillator();
+                oscillator.type = 'sine';
+                
+                const gainNode = audioContext.createGain();
+                gainNode.gain.value = volume;
+                
+                // 设置频率变化
+                oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
+                
+                // 设置音量变化
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                // 连接节点
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 播放并设置自动停止
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
+            }
+        }
+        
+        function playCollisionSound() {
+            if (musicEnabled && audioContext) {
+                // 创建碰撞音效
+                const oscillator = audioContext.createOscillator();
+                oscillator.type = 'sawtooth';
+                
+                const gainNode = audioContext.createGain();
+                gainNode.gain.value = volume;
+                
+                // 设置频率变化
+                oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(55, audioContext.currentTime + 0.5);
+                
+                // 设置音量变化
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                // 连接节点
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 播放并设置自动停止
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.5);
+            }
+        }
+        
+        function playScoreSound() {
+            if (musicEnabled && audioContext) {
+                // 创建得分音效
+                const oscillator = audioContext.createOscillator();
+                oscillator.type = 'sine';
+                
+                const gainNode = audioContext.createGain();
+                gainNode.gain.value = volume;
+                
+                // 设置频率变化
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(1760, audioContext.currentTime + 0.1);
+                
+                // 设置音量变化
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                
+                // 连接节点
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 播放并设置自动停止
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+            }
+        }
+        
+        // 粒子类
+        class Particle {
+            constructor(x, y, vx, vy, color, life) {
+                this.pos = createVector(x, y);
+                this.vel = createVector(vx, vy);
+                this.color = color;
+                this.alpha = 255;
+                this.life = life;
+                this.size = random(3, 8);
+            }
+            
+            update() {
+                this.pos.add(this.vel);
+                this.vel.mult(0.95); // 阻力
+                this.alpha -= 255 / this.life;
+            }
+            
+            draw() {
+                push();
+                noStroke();
+                fill(this.color[0], this.color[1], this.color[2], this.alpha);
+                ellipse(this.pos.x, this.pos.y, this.size, this.size);
+                pop();
+            }
+        }
+    </script>
+</body>
+</html>
