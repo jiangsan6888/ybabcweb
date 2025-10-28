@@ -30,3 +30,8 @@
 
 1. 克隆仓库
 2. 直接在浏览器中打开对应游戏的index.html文件
+
+## 在线访问（GitHub Pages）
+
+- 站点地址：`https://jiangsan6888.github.io/ybabcweb/`
+- 如无法访问，请先在仓库 Settings → Pages 启用 Pages，Source 选择 "Deploy from a branch"，Branch 选择 `main`，Folder 选择 `/`。
