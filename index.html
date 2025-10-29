@@ -448,6 +448,23 @@
       </div>
     </div>
     <script>
+    // Supabase配置（与admin一致）
+    const SUPABASE_URL = 'https://rfbjjgzmdtmvjxfbmvpm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmYmpqZ3ptZHRtdmp4ZmJtdnBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyOTA1NjIsImV4cCI6MjA3Njg2NjU2Mn0.-WrayfzkBmfFWmEplWRI6RmxdZBGwU2H286QafsMQf0';
+
+    // 初始化Supabase客户端（如果可用）
+    let supabaseClient = null;
+    try {
+      if (typeof supabase !== 'undefined') {
+        const { createClient } = supabase;
+        supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase客户端初始化成功');
+      } else {
+        console.warn('Supabase库未加载，系统将使用本地存储模式');
+      }
+    } catch (error) {
+      console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
+    }
     // 会员登录/注册逻辑
     const userBar = document.getElementById('user-bar');
     const loginBtn = document.getElementById('login-btn');
@@ -462,6 +479,26 @@
     }
     function setUsers(users) {
       localStorage.setItem('abc_users', JSON.stringify(users));
+    }
+    async function supaFetchMembers() {
+      if (!supabaseClient) return null;
+      const { data, error } = await supabaseClient.from('members').select('username');
+      if (error) { console.warn('获取Supabase会员失败，使用本地存储:', error.message); return null; }
+      const users = {};
+      (data||[]).forEach(r=>{ users[r.username]=true; });
+      return users;
+    }
+    async function supaRegister(username, password) {
+      if (!supabaseClient) return false;
+      const { error } = await supabaseClient.from('members').insert({ username, password });
+      if (error) { console.warn('Supabase注册失败:', error.message); return false; }
+      return true;
+    }
+    async function supaLogin(username, password) {
+      if (!supabaseClient) return false;
+      const { data, error } = await supabaseClient.from('members').select('id').eq('username', username).eq('password', password).maybeSingle();
+      if (error) { console.warn('Supabase登录查询失败:', error.message); return false; }
+      return !!data;
     }
     function getUserProfiles() {
       return JSON.parse(localStorage.getItem('abc_user_profiles')||'{}');
@@ -657,7 +694,7 @@
       toggleAuth.textContent = isLoginMode ? '没有账号？注册' : '已有账号？登录';
       authError.style.display = 'none';
     };
-    authForm.onsubmit = e => {
+    authForm.onsubmit = async e => {
       e.preventDefault();
       const username = document.getElementById('auth-username').value.trim();
       const password = document.getElementById('auth-password').value;
@@ -680,24 +717,49 @@
             return;
           }
         } else {
-          // 普通用户登录
-          if (!users[username] || users[username] !== password) {
-            authError.textContent = '用户名或密码错误';
-            authError.style.display = 'block';
-            return;
+          // 优先尝试Supabase登录
+          let ok = false;
+          if (supabaseClient) {
+            ok = await supaLogin(username, password);
+          }
+          // 回退本地
+          if (!ok) {
+            if (!users[username] || users[username] !== password) {
+              authError.textContent = '用户名或密码错误';
+              authError.style.display = 'block';
+              return;
+            }
           }
         }
         setCurrentUser(username);
         authModal.style.display = 'none';
         renderUserBar();
       } else {
-        if (users[username]) {
-          authError.textContent = '用户名已存在';
-          authError.style.display = 'block';
-          return;
+        // 注册：先尝试Supabase
+        if (supabaseClient) {
+          // 检查重名
+          const { data: exists, error: exErr } = await supabaseClient.from('members').select('id').eq('username', username).maybeSingle();
+          if (exErr) { console.warn('检查用户名失败:', exErr.message); }
+          if (exists) {
+            authError.textContent = '用户名已存在';
+            authError.style.display = 'block';
+            return;
+          }
+          const ok = await supaRegister(username, password);
+          if (!ok) {
+            authError.textContent = '注册失败，请稍后重试';
+            authError.style.display = 'block';
+            return;
+          }
+        } else {
+          if (users[username]) {
+            authError.textContent = '用户名已存在';
+            authError.style.display = 'block';
+            return;
+          }
+          users[username] = password;
+          setUsers(users);
         }
-        users[username] = password;
-        setUsers(users);
         setCurrentUser(username);
         // 初始化用户资料
         setUserProfile(username, {
@@ -865,15 +927,25 @@
       localStorage.setItem(key, JSON.stringify(msgs));
     }
     
-    function getAllUsers() {
+    function getAllUsersLocal() {
       const users = JSON.parse(localStorage.getItem('abc_users')||'{}');
       const currentUser = getCurrentUser();
       return Object.keys(users).filter(user => user !== currentUser && user !== 'admin');
     }
-    
-    function updateUserSelect() {
+
+    async function updateUserSelect() {
       const select = document.getElementById('private-user-select');
-      const users = getAllUsers();
+      let users = [];
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient.from('members').select('username');
+        if (!error && data) {
+          const me = getCurrentUser();
+          users = data.map(r=>r.username).filter(u=>u!==me && u!=='admin');
+        }
+      }
+      if (!users.length) {
+        users = getAllUsersLocal();
+      }
       select.innerHTML = '<option value="">选择私聊用户...</option>' + 
         users.map(user => `<option value="${user}">${user}</option>`).join('');
     }
@@ -1017,14 +1089,33 @@
       };
     }
     
-    function renderChatMsgs() {
-      let msgs = [];
+    async function fetchChatMsgsFromSupabase() {
+      if (!supabaseClient) return null;
       if (currentChatMode === 'group') {
-        msgs = getChatMsgs();
+        const { data, error } = await supabaseClient.from('messages').select('*').eq('scope','group').order('created_at', { ascending: true });
+        if (error) { console.warn('获取群聊失败，使用本地:', error.message); return null; }
+        return (data||[]).map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
       } else if (currentPrivateUser) {
-        msgs = getPrivateChatMsgs(currentPrivateUser);
+        const me = getCurrentUser();
+        const { data, error } = await supabaseClient.from('messages').select('*').eq('scope','private').in('chat_pair',[`${me}|${currentPrivateUser}`,`${currentPrivateUser}|${me}`]).order('created_at',{ascending:true});
+        if (error) { console.warn('获取私聊失败，使用本地:', error.message); return null; }
+        return (data||[]).map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
       }
-      
+      return [];
+    }
+
+    async function renderChatMsgs() {
+      let msgs = [];
+      const remote = await fetchChatMsgsFromSupabase();
+      if (remote) {
+        msgs = remote;
+      } else {
+        if (currentChatMode === 'group') {
+          msgs = getChatMsgs();
+        } else if (currentPrivateUser) {
+          msgs = getPrivateChatMsgs(currentPrivateUser);
+        }
+      }
       const msgDiv = document.getElementById('chat-messages');
       msgDiv.innerHTML = msgs.map(m=>{
         let content = '';
@@ -1066,12 +1157,11 @@
       document.getElementById('private-user-select').onchange = onPrivateUserChange;
     }
     document.getElementById('chat-toggle').onclick = toggleChatWindow;
-    document.getElementById('chat-form').onsubmit = function(e){
+    document.getElementById('chat-form').onsubmit = async function(e){
       e.preventDefault();
       const input = document.getElementById('chat-input');
       const text = input.value.trim();
       if(!text) return;
-      
       const now = new Date();
       const timeStr = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
       const message = {
@@ -1079,17 +1169,28 @@
         time: timeStr,
         text: text
       };
-      
-      if (currentChatMode === 'group') {
-        const msgs = getChatMsgs();
-        msgs.push(message);
-        setChatMsgs(msgs.slice(-100));
-      } else if (currentPrivateUser) {
-        const msgs = getPrivateChatMsgs(currentPrivateUser);
-        msgs.push(message);
-        setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+      let sentRemote = false;
+      if (supabaseClient) {
+        if (currentChatMode === 'group') {
+          const { error } = await supabaseClient.from('messages').insert({ scope:'group', username: message.user, text: message.text, img: null, time_text: message.time });
+          if (!error) sentRemote = true; else console.warn('群聊消息远程保存失败，改用本地:', error.message);
+        } else if (currentPrivateUser) {
+          const pair = `${message.user}|${currentPrivateUser}`;
+          const { error } = await supabaseClient.from('messages').insert({ scope:'private', chat_pair: pair, username: message.user, text: message.text, img: null, time_text: message.time });
+          if (!error) sentRemote = true; else console.warn('私聊消息远程保存失败，改用本地:', error.message);
+        }
       }
-      
+      if (!sentRemote) {
+        if (currentChatMode === 'group') {
+          const msgs = getChatMsgs();
+          msgs.push(message);
+          setChatMsgs(msgs.slice(-100));
+        } else if (currentPrivateUser) {
+          const msgs = getPrivateChatMsgs(currentPrivateUser);
+          msgs.push(message);
+          setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+        }
+      }
       input.value = '';
       renderChatMsgs();
     };
@@ -1149,7 +1250,7 @@
       };
       reader.readAsDataURL(file);
     };
-    function sendChatImg(imgData) {
+    async function sendChatImg(imgData) {
       const now = new Date();
       const timeStr = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
       const message = {
@@ -1158,20 +1259,46 @@
         text: document.getElementById('chat-input').value.trim(),
         img: imgData
       };
-      
-      if (currentChatMode === 'group') {
-        const msgs = getChatMsgs();
-        msgs.push(message);
-        setChatMsgs(msgs.slice(-100));
-      } else if (currentPrivateUser) {
-        const msgs = getPrivateChatMsgs(currentPrivateUser);
-        msgs.push(message);
-        setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+      let sentRemote = false;
+      if (supabaseClient) {
+        if (currentChatMode === 'group') {
+          const { error } = await supabaseClient.from('messages').insert({ scope:'group', username: message.user, text: message.text||null, img: message.img, time_text: message.time });
+          if (!error) sentRemote = true; else console.warn('群聊图片消息远程保存失败，改用本地:', error.message);
+        } else if (currentPrivateUser) {
+          const pair = `${message.user}|${currentPrivateUser}`;
+          const { error } = await supabaseClient.from('messages').insert({ scope:'private', chat_pair: pair, username: message.user, text: message.text||null, img: message.img, time_text: message.time });
+          if (!error) sentRemote = true; else console.warn('私聊图片消息远程保存失败，改用本地:', error.message);
+        }
       }
-      
+      if (!sentRemote) {
+        if (currentChatMode === 'group') {
+          const msgs = getChatMsgs();
+          msgs.push(message);
+          setChatMsgs(msgs.slice(-100));
+        } else if (currentPrivateUser) {
+          const msgs = getPrivateChatMsgs(currentPrivateUser);
+          msgs.push(message);
+          setPrivateChatMsgs(currentPrivateUser, msgs.slice(-100));
+        }
+      }
       document.getElementById('chat-input').value = '';
       renderChatMsgs();
     }
+    // Realtime 订阅
+    (function setupRealtime(){
+      if (!supabaseClient) return;
+      try {
+        supabaseClient.channel('realtime:messages')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+            // 新消息到达时刷新（尽量轻量，仅在窗口打开时）
+            const win = document.getElementById('chat-window');
+            if (win && win.style.display!== 'none') {
+              renderChatMsgs();
+            }
+          })
+          .subscribe();
+      } catch (e) { console.warn('订阅Realtime失败:', e); }
+    })();
     // 图片预览弹窗
     let imgPreviewDiv = null;
     function showImgPreview(src) {

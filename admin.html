@@ -298,19 +298,24 @@
       localStorage.setItem('abc_users', JSON.stringify(users));
     }
     
-    function renderMembers() {
+    async function fetchMembers() {
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient.from('members').select('username').order('username');
+        if (!error && data) return data.map(r=>r.username).filter(u=>u!=='admin');
+        console.warn('从Supabase获取会员失败，回退本地:', error && error.message);
+      }
       const users = getUsers();
+      return Object.keys(users).filter(username => username !== 'admin');
+    }
+    
+    async function renderMembers() {
+      const memberUsers = await fetchMembers();
       const tbody = document.querySelector('#member-table tbody');
       tbody.innerHTML = '';
-      
-      // 过滤掉admin用户
-      const memberUsers = Object.keys(users).filter(username => username !== 'admin');
-      
-      if (memberUsers.length === 0) {
+      if (!memberUsers || memberUsers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#888;">暂无会员数据</td></tr>';
         return;
       }
-      
       memberUsers.forEach((username, index) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -324,17 +329,23 @@
     }
     
     // 删除会员
-    function deleteMember(memberIndex, username) {
+    async function deleteMember(memberIndex, username) {
       if (!confirm(`确定要删除会员 ${username} 吗？`)) {
         return;
       }
-      
+      if (supabaseClient) {
+        const { error } = await supabaseClient.from('members').delete().eq('username', username);
+        if (error) {
+          console.warn('Supabase删除会员失败，回退本地:', error.message);
+        } else {
+          alert('会员删除成功！');
+          renderMembers();
+          return;
+        }
+      }
       const users = getUsers();
-      const usernames = Object.keys(users);
-      const targetUsername = usernames[memberIndex];
-      
-      if (targetUsername && targetUsername !== 'admin') {
-        delete users[targetUsername];
+      if (users[username] && username !== 'admin') {
+        delete users[username];
         setUsers(users);
         alert('会员删除成功！');
         renderMembers();
