@@ -542,7 +542,24 @@
       }
     }
     // 广告管理逻辑
-    function getAdData() {
+    async function getAdData() {
+      if(supabaseClient){
+        const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
+        if(!error && data && data.length){
+          // type: 'banner' or 'footer', imgs: json字符串/数组
+          const adData = { banner: [], footer: [] };
+          data.forEach(ad => {
+            let imgs = ad.imgs;
+            if(typeof imgs === 'string') { try{ imgs = JSON.parse(imgs); }catch{} }
+            if(!Array.isArray(imgs)) imgs = [];
+            const obj = { text: ad.content || '', imgs };
+            if(ad.type === 'banner') adData.banner.push(obj);
+            if(ad.type === 'footer') adData.footer.push(obj);
+          });
+          return adData;
+        }
+      }
+      // 断网用本地
       const raw = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
       const normalizeArr = (arr)=> (arr||[]).map(item=>{
         if(typeof item === 'string') { return { text: item, imgs: [] }; }
@@ -553,6 +570,7 @@
       });
       return { banner: normalizeArr(raw.banner), footer: normalizeArr(raw.footer) };
     }
+
     function setAdData(data) {
       localStorage.setItem('abc_ads', JSON.stringify(data));
     }
@@ -568,52 +586,53 @@
       return `<div style='padding:${padding};display:flex;align-items:center;gap:8px;justify-content:center;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}'>${html}</div>`;
     }
     // 轮播逻辑
-    let adBannerIndex = 0, adFooterIndex = 0, adBannerTimer = null, adFooterTimer = null;
-    function startAdCarousel() {
-      const adData = getAdData();
+    async function startAdCarousel(adData) {
       const adBannerDiv = document.getElementById('ad-banner-content');
       const adFooterDiv = document.getElementById('ad-footer-content');
+      let adBannerIndex = 0, adFooterIndex = 0, adBannerTimer = null, adFooterTimer = null;
       // 顶部广告
       if(adData.banner.length>1) {
         adBannerIndex = 0;
-        if(adBannerTimer) clearInterval(adBannerTimer);
+        if(window.adBannerTimer) clearInterval(window.adBannerTimer);
         adBannerDiv.innerHTML = renderAdItem(adData.banner[adBannerIndex], '2px 0', adBannerIndex, 'banner');
-        adBannerTimer = setInterval(()=>{
+        window.adBannerTimer = setInterval(()=>{
           adBannerIndex = (adBannerIndex+1)%adData.banner.length;
           adBannerDiv.innerHTML = renderAdItem(adData.banner[adBannerIndex], '2px 0', adBannerIndex, 'banner');
         }, 3000);
       } else if(adData.banner.length===1) {
-        if(adBannerTimer) clearInterval(adBannerTimer);
+        if(window.adBannerTimer) clearInterval(window.adBannerTimer);
         adBannerDiv.innerHTML = renderAdItem(adData.banner[0], '2px 0', 0, 'banner');
       } else {
-        if(adBannerTimer) clearInterval(adBannerTimer);
+        if(window.adBannerTimer) clearInterval(window.adBannerTimer);
         adBannerDiv.innerHTML = '';
       }
       // 底部广告
       if(adData.footer.length>1) {
         adFooterIndex = 0;
-        if(adFooterTimer) clearInterval(adFooterTimer);
+        if(window.adFooterTimer) clearInterval(window.adFooterTimer);
         adFooterDiv.innerHTML = renderAdItem(adData.footer[adFooterIndex], '4px 0', adFooterIndex, 'footer');
-        adFooterTimer = setInterval(()=>{
+        window.adFooterTimer = setInterval(()=>{
           adFooterIndex = (adFooterIndex+1)%adData.footer.length;
           adFooterDiv.innerHTML = renderAdItem(adData.footer[adFooterIndex], '4px 0', adFooterIndex, 'footer');
         }, 3000);
       } else if(adData.footer.length===1) {
-        if(adFooterTimer) clearInterval(adFooterTimer);
+        if(window.adFooterTimer) clearInterval(window.adFooterTimer);
         adFooterDiv.innerHTML = renderAdItem(adData.footer[0], '4px 0', 0, 'footer');
       } else {
-        if(adFooterTimer) clearInterval(adFooterTimer);
+        if(window.adFooterTimer) clearInterval(window.adFooterTimer);
         adFooterDiv.innerHTML = '';
       }
     }
+    // 首次广告渲染，异步
+    (async()=>{await renderAds();})();
     // 修改renderAds，编辑广告后立即刷新轮播
-    function renderAds() {
-      const adData = getAdData();
+    async function renderAds() {
+      const adData = await getAdData();
       const adBannerDiv = document.getElementById('ad-banner-content');
       const adFooterDiv = document.getElementById('ad-footer-content');
       adBannerDiv.innerHTML = adData.banner.map((ad,i)=>renderAdItem(ad, '2px 0', i, 'banner')).join('');
       adFooterDiv.innerHTML = adData.footer.map((ad,i)=>renderAdItem(ad, '4px 0', i, 'footer')).join('');
-      startAdCarousel();
+      startAdCarousel(adData);
     }
 
     // 广告详细弹窗
