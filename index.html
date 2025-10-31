@@ -489,10 +489,13 @@
       return users;
     }
     async function supaRegister(username, password) {
-      if (!supabaseClient) return false;
-      const { error } = await supabaseClient.from('members').insert({ username, password });
-      if (error) { console.warn('Supabase注册失败:', error.message); return false; }
-      return true;
+      if (!supabaseClient) return { success: false, error: 'Supabase客户端未初始化' };
+      const { data, error } = await supabaseClient.from('members').insert({ username, password });
+      if (error) { 
+        console.error('Supabase注册失败:', error);
+        return { success: false, error: error.message, details: error };
+      }
+      return { success: true, data };
     }
     async function supaLogin(username, password) {
       if (!supabaseClient) return false;
@@ -758,18 +761,38 @@
         if (supabaseClient) {
           // 检查重名
           const { data: exists, error: exErr } = await supabaseClient.from('members').select('id').eq('username', username).maybeSingle();
-          if (exErr) { console.warn('检查用户名失败:', exErr.message); }
+          if (exErr) { 
+            console.warn('检查用户名失败:', exErr.message);
+            authError.textContent = `检查用户名失败: ${exErr.message}`;
+            authError.style.display = 'block';
+            return;
+          }
           if (exists) {
             authError.textContent = '用户名已存在';
             authError.style.display = 'block';
             return;
           }
-          const ok = await supaRegister(username, password);
-          if (!ok) {
-            authError.textContent = '注册失败，请稍后重试';
+          
+          // 尝试注册
+          const result = await supaRegister(username, password);
+          if (!result.success) {
+            // 显示详细错误信息
+            let errorMsg = '注册失败';
+            if (result.error) {
+              errorMsg += ': ' + result.error;
+              // 如果涉及权限问题，给出提示
+              if (result.error.includes('permission') || result.error.includes('RLS') || result.error.includes('policy')) {
+                errorMsg += '\n\n提示：可能是数据库权限问题，请联系管理员检查RLS策略设置。';
+              }
+            }
+            authError.textContent = errorMsg;
             authError.style.display = 'block';
+            console.error('注册失败详情:', result.details);
             return;
           }
+          // 注册成功，同时保存到本地
+          users[username] = password;
+          setUsers(users);
         } else {
           if (users[username]) {
             authError.textContent = '用户名已存在';
