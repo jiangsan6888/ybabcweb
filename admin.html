@@ -497,33 +497,48 @@
       const newData = { banner: clean(data.banner), footer: clean(data.footer) };
       setAdData(newData);
 
-      // ------- 新增: 写入Supabase广告表 -------
+      // ------- 写入Supabase广告表，失败时输出详细错误 -------
       if (supabaseClient) {
         let succ = 0, fail = 0, failMsg = '';
         // 顶部广告
         for(const ad of newData.banner){
-          const { error } = await supabaseClient.from('advertisements').insert({
+          const payload = {
             type: 'banner',
             content: ad.text||'',
-            admin_id: 1,  // 可替换为实际管理员ID
+            admin_id: 1,
             imgs: ad.imgs ? JSON.stringify(ad.imgs) : null,
             created_at: new Date().toISOString()
-          });
-          if(error) { fail++; failMsg = error.message; } else succ++;
+          };
+          try {
+            const { error } = await supabaseClient.from('advertisements').insert(payload);
+            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error }); }
+            else succ++;
+          } catch (err) {
+            fail++; failMsg = String(err); console.error('广告写入异常(banner):', { payload, err });
+          }
         }
         // 底部广告
         for(const ad of newData.footer){
-          const { error } = await supabaseClient.from('advertisements').insert({
+          const payload = {
             type: 'footer',
             content: ad.text||'',
             admin_id: 1,
             imgs: ad.imgs ? JSON.stringify(ad.imgs) : null,
             created_at: new Date().toISOString()
-          });
-          if(error) { fail++; failMsg = error.message; } else succ++;
+          };
+          try {
+            const { error } = await supabaseClient.from('advertisements').insert(payload);
+            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); }
+            else succ++;
+          } catch (err) {
+            fail++; failMsg = String(err); console.error('广告写入异常(footer):', { payload, err });
+          }
         }
-        if(succ>0) alert(`有 ${succ} 条广告已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
-        else alert('未能成功存储到数据库（广告），请检查网络/Supabase配置。');
+        if (succ>0) {
+          alert(`有 ${succ} 条广告已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
+        } else {
+          alert('未能成功存储到数据库（广告）。\n错误信息: ' + (failMsg||'未知错误') + '\n\n请检查: 表字段是否为(type, content, imgs, admin_id, created_at)，RLS策略是否允许 anon INSERT');
+        }
         return;
       }
       alert('广告已保存！（仅本地，未同步数据库）');
