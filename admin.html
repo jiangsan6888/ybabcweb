@@ -133,7 +133,7 @@
       const statusDiv = document.getElementById('admin-network-status');
       const statusText = document.getElementById('admin-network-status-text');
       
-      if (!navigator.onLine) {
+      if (!navigator.onLi
         statusDiv.style.display = 'block';
         statusDiv.style.background = '#f44336';
         statusDiv.style.color = '#fff';
@@ -689,12 +689,31 @@
       setNotices(notices);
       renderNoticeForm();
     };
-    // 保存通知
-    document.getElementById('notice-form').onsubmit = function(e){
+    // 保存通知（新增Supabase远程写入）
+    document.getElementById('notice-form').onsubmit = async function(e){
       e.preventDefault();
       const notices = getNotices();
+      
+      if (supabaseClient) {
+        let succ = 0, fail = 0, failMsg = '';
+        for (const n of notices) {
+          if (!n.text || !n.text.trim()) continue;
+          const { error } = await supabaseClient.from('notices').insert({
+            content: n.text,
+            img: n.img || null,
+            time: n.time || null,
+            admin_id: 1,
+            created_at: new Date().toISOString()
+          });
+          if (error) { fail++; failMsg = error.message; } else succ++;
+        }
+        if (succ>0) alert(`有 ${succ} 条通知已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
+        else alert('未能成功存储到数据库（通知），请检查网络/权限/表结构。');
+        return;
+      }
+      // 离线回退：仅本地保存
       setNotices(notices);
-      alert('通知已保存！');
+      alert('通知已保存到本地（离线模式）。联网后请再次发布以同步数据库。');
     };
     const noticeMenuLi = document.querySelector('li[data-section="notice"]');
     noticeMenuLi.addEventListener('click', renderNoticeForm);
