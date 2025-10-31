@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>延边ABC游戏协会</title>
-    <link rel="icon" href="延边ABC Logo">
+    <link rel="icon" href="延边ABC Logo.png">
     <style>
         body {
             font-family: 'Microsoft YaHei', Arial, sans-serif;
@@ -1513,13 +1513,27 @@
       }
       
       try {
-        peer = new Peer(user, { debug: 2 });
+        const uniqueId = `${user}-${Math.random().toString(36).slice(2,8)}`;
+        peer = new Peer(uniqueId, { debug: 2 });
         peer.on('open', id => { 
           console.log('PeerJS连接成功，用户ID:', id);
         });
         peer.on('error', error => {
           console.error('PeerJS连接错误:', error);
-          alert('视频通话服务连接失败，请检查网络连接或VPN设置');
+          if (String(error && error.message || '').includes('is taken')) {
+            // ID占用时重试一次
+            try {
+              const retryId = `${user}-${Math.random().toString(36).slice(2,8)}`;
+              peer?.destroy();
+              peer = new Peer(retryId, { debug: 2 });
+              peer.on('open', id => console.log('PeerJS重试成功，用户ID:', id));
+              peer.on('error', err => console.error('PeerJS重试仍失败:', err));
+            } catch (e) {
+              console.error('PeerJS重试初始化失败:', e);
+            }
+          } else {
+            alert('视频通话服务连接失败，请检查网络连接或稍后重试');
+          }
         });
         peer.on('call', async call => {
           if(!confirm('收到视频通话请求，是否接听？')) return;
@@ -1538,6 +1552,8 @@
             alert('无法访问摄像头，请检查权限设置');
           }
         });
+        // 页面关闭时销毁peer，释放ID
+        window.addEventListener('beforeunload', () => { try { peer && peer.destroy(); } catch (e) {} });
       } catch (error) {
         console.error('PeerJS初始化失败:', error);
         alert('视频通话功能初始化失败，请检查网络连接');
