@@ -503,7 +503,7 @@
         // 顶部广告
         for(const ad of newData.banner){
           const payload = {
-            type: 'banner',
+            ad_type: 'banner',
             content: ad.text||''
           };
           try {
@@ -517,7 +517,7 @@
         // 底部广告
         for(const ad of newData.footer){
           const payload = {
-            type: 'footer',
+            ad_type: 'footer',
             content: ad.text||''
           };
           try {

@@ -549,15 +549,15 @@
       if(supabaseClient){
         const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
         if(!error && data && data.length){
-          // type: 'banner' or 'footer', imgs: json字符串/数组
           const adData = { banner: [], footer: [] };
           data.forEach(ad => {
+            const typeVal = ad.ad_type || ad.type; // 兼容两种字段
             let imgs = ad.imgs;
             if(typeof imgs === 'string') { try{ imgs = JSON.parse(imgs); }catch{} }
             if(!Array.isArray(imgs)) imgs = [];
             const obj = { text: ad.content || '', imgs };
-            if(ad.type === 'banner') adData.banner.push(obj);
-            if(ad.type === 'footer') adData.footer.push(obj);
+            if(typeVal === 'banner') adData.banner.push(obj);
+            if(typeVal === 'footer') adData.footer.push(obj);
           });
           return adData;
         }
