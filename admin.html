@@ -504,10 +504,7 @@
         for(const ad of newData.banner){
           const payload = {
             type: 'banner',
-            content: ad.text||'',
-            admin_id: 1,
-            imgs: ad.imgs ? JSON.stringify(ad.imgs) : null,
-            created_at: new Date().toISOString()
+            content: ad.text||''
           };
           try {
             const { error } = await supabaseClient.from('advertisements').insert(payload);
@@ -521,10 +518,7 @@
         for(const ad of newData.footer){
           const payload = {
             type: 'footer',
-            content: ad.text||'',
-            admin_id: 1,
-            imgs: ad.imgs ? JSON.stringify(ad.imgs) : null,
-            created_at: new Date().toISOString()
+            content: ad.text||''
           };
           try {
             const { error } = await supabaseClient.from('advertisements').insert(payload);
