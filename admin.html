@@ -133,7 +133,7 @@
       const statusDiv = document.getElementById('admin-network-status');
       const statusText = document.getElementById('admin-network-status-text');
       
-      if (!navigator.onLi
+      if (!navigator.onLine) {
         statusDiv.style.display = 'block';
         statusDiv.style.background = '#f44336';
         statusDiv.style.color = '#fff';
