@@ -504,6 +504,7 @@
         for(const ad of newData.banner){
           const payload = {
             ad_type: 'banner',
+            type: 'banner',
             content: ad.text||''
           };
           try {
@@ -518,6 +519,7 @@
         for(const ad of newData.footer){
           const payload = {
             ad_type: 'footer',
+            type: 'footer',
             content: ad.text||''
           };
           try {
