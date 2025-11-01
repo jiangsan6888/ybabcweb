@@ -141,6 +141,17 @@
 
     // 立即验证（不阻塞页面渲染）
     (async ()=>{ await validateSupabaseClient(); })();
+    // 生成 UUID (v4 简易实现) 用作本地与远端匹配的 client_uuid
+    function generateUUID(){
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+        const r = Math.random()*16|0; const v = c==='x'? r : (r&0x3|0x8); return v.toString(16);
+      });
+    }
+
+    // 在 admin 成功修改数据库后写入标记，触发前端页面的 storage 监听以同步更新
+    function notifyFrontendUpdate(){
+      try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){ console.warn('写入 abc_last_update 失败', e); }
+    }
     
     // 管理员权限验证
     async function checkAdminAuth() {
@@ -467,8 +478,11 @@
               const { error } = await supabaseClient.from('advertisements').delete().eq('id', dbId);
               if(error){
                 // 写入 pending delete
-                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);}
+                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);} 
                 console.warn('数据库删除广告失败，已加入 pending', error);
+              } else {
+                // 删除成功，通知前端刷新
+                notifyFrontendUpdate();
               }
             }catch(err){
               try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);} 
@@ -522,13 +536,13 @@
     // 新增广告
     document.getElementById('add-banner-ad').onclick = function() {
       const adData = getAdData();
-  adData.banner.push({text:'',imgs:[], created_at: new Date().toISOString()});
+  adData.banner.push({text:'',imgs:[], created_at: new Date().toISOString(), client_uuid: generateUUID()});
       setAdData(adData);
       renderAdForm();
     };
     document.getElementById('add-footer-ad').onclick = function() {
       const adData = getAdData();
-  adData.footer.push({text:'',imgs:[], created_at: new Date().toISOString()});
+  adData.footer.push({text:'',imgs:[], created_at: new Date().toISOString(), client_uuid: generateUUID()});
       setAdData(adData);
       renderAdForm();
     };
@@ -554,6 +568,7 @@
             type: 'banner',
             content: ad.text||'',
             imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
+            client_uuid: ad.client_uuid || null,
             admin_id: 1,
             created_at: new Date().toISOString()
           };
@@ -565,12 +580,17 @@
                 try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
               else succ++;
             } else {
-              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id').maybeSingle();
+              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id, client_uuid').maybeSingle();
               if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error });
-                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
+                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, client_uuid: payload.client_uuid||null, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
               else { succ++; if(inserted && inserted.id){ /* 写回 localStorage，使用 created_at 匹配注入 db_id */
                   const current = getAdData();
                   const arr = current.banner || [];
+                  // 优先使用 client_uuid 来精确匹配
+                  for(let i=0;i<arr.length;i++){
+                    if(!arr[i].db_id && payload.client_uuid && arr[i].client_uuid && arr[i].client_uuid === payload.client_uuid){ arr[i].db_id = inserted.id; break; }
+                  }
+                  // 回退到 created_at 匹配
                   for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } }
                   setAdData(current);
                 }
@@ -588,6 +608,7 @@
             type: 'footer',
             content: ad.text||'',
             imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
+            client_uuid: ad.client_uuid || null,
             admin_id: 1,
             created_at: new Date().toISOString()
           };
@@ -597,9 +618,9 @@
               if(error){ fail++; failMsg = error.message||String(error); console.error('广告更新失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
               else succ++;
             } else {
-              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id').maybeSingle();
+              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id, client_uuid').maybeSingle();
               if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
-              else { succ++; if(inserted && inserted.id){ const current = getAdData(); const arr = current.footer || []; for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } } setAdData(current); } }
+              else { succ++; if(inserted && inserted.id){ const current = getAdData(); const arr = current.footer || []; for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && payload.client_uuid && arr[i].client_uuid && arr[i].client_uuid === payload.client_uuid){ arr[i].db_id = inserted.id; break; } } for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } } setAdData(current); } }
             }
           } catch (err) {
             // 遇到异常（如 401/网络等）时，将 payload 暂存到本地 pending 队列，便于后续重试与审核
@@ -745,6 +766,9 @@
               if(error){
                 try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} 
                 console.warn('数据库删除通知失败，已加入 pending', error);
+              } else {
+                // 删除成功，通知前端刷新
+                notifyFrontendUpdate();
               }
             }catch(err){ try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} console.error('删除通知异常，已加入 pending', err); }
           })();
@@ -792,7 +816,7 @@
       const notices = getNotices();
       const now = new Date();
       const time = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
-  notices.unshift({text:'',img:'',time, created_at: new Date().toISOString()});
+  notices.unshift({text:'',img:'',time, created_at: new Date().toISOString(), client_uuid: generateUUID()});
       setNotices(notices);
       renderNoticeForm();
     };
@@ -811,6 +835,7 @@
             content: n.text,
             img: n.img || null,
             time: n.time || null,
+            client_uuid: n.client_uuid || null,
             admin_id: 1,
             created_at: new Date().toISOString()
           };
@@ -824,23 +849,31 @@
                 try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'update', table:'notices', id:n.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
               } else {
                 succ++;
+                // 成功更新，通知前端刷新
+                notifyFrontendUpdate();
               }
             } else {
-              const { data: inserted, error } = await supabaseClient.from('notices').insert(payload).select('id').maybeSingle();
+              const { data: inserted, error } = await supabaseClient.from('notices').insert(payload).select('id, client_uuid').maybeSingle();
               if(error){
                 fail++; failMsg = error.message || String(error);
                 console.error('通知写入失败:', { payload, error });
                 try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'insert', table:'notices', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
               } else {
                 succ++;
+                // 插入成功，通知前端刷新
+                notifyFrontendUpdate();
                 if(inserted && inserted.id){
                   // 写回 localStorage: 尝试在本地匹配刚插入的通知并记录 db_id
                   try{
                     const current = getNotices();
+                    // 优先使用 client_uuid 精确匹配
+                    for(let i=0;i<current.length;i++){
+                      if(!current[i].db_id && n.client_uuid && current[i].client_uuid && current[i].client_uuid === n.client_uuid){ current[i].db_id = inserted.id; break; }
+                    }
+                    // 回退到文本+图片匹配
                     for(let i=0;i<current.length;i++){
                       if(!current[i].db_id && current[i].text===n.text && (current[i].img||'')===(n.img||'')){
-                        current[i].db_id = inserted.id;
-                        break;
+                        current[i].db_id = inserted.id; break;
                       }
                     }
                     setNotices(current);
@@ -942,6 +975,8 @@
         if(error){ alert('重试失败: '+(error.message||String(error))); console.error('重试失败', error); return; }
         // 成功则从 pending 中移除
         items.splice(idx,1); setNoticePending(items);
+  // 重试成功，通知前端更新
+  notifyFrontendUpdate();
         alert('重试成功，通知已发布至数据库');
       } catch(err){ console.error('重试异常', err); alert('重试异常：' + String(err)); }
     }
@@ -968,6 +1003,154 @@
         setNoticePending([]); renderPendingNotices(); alert('已清空 pending 列表');
       }
     };
+
+    // ---------- Pending 自动重试（广告与通知） ----------
+    function getAdsPending(){ return JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); }
+    function setAdsPending(list){ localStorage.setItem('abc_ads_pending', JSON.stringify(list)); }
+
+    let _processingPending = false;
+    async function processPendingQueues(){
+      if(_processingPending) return;
+      _processingPending = true;
+      try{
+        if(!supabaseClient){ return; }
+        // 处理广告 pending
+        let adsPending = getAdsPending();
+        let adsChanged = false;
+        for(let i=adsPending.length-1;i>=0;i--){
+          const item = adsPending[i];
+          try{
+            if(item.op === 'delete' && item.table === 'advertisements' && item.id){
+              const { error } = await supabaseClient.from('advertisements').delete().eq('id', item.id);
+              if(!error){ adsPending.splice(i,1); adsChanged = true; }
+            } else if(item.op === 'insert' && item.table === 'advertisements' && item.payload){
+              const { data, error } = await supabaseClient.from('advertisements').insert(item.payload).select('id, client_uuid').maybeSingle();
+              if(!error && data && data.id){
+                // 写回 localStorage 的 db_id
+                try{ const current = getAdData(); ['banner','footer'].forEach(section=>{ (current[section]||[]).forEach(a=>{ if(!a.db_id && item.client_uuid && a.client_uuid && a.client_uuid===item.client_uuid){ a.db_id = data.id; } }); }); setAdData(current); }catch(e){console.warn('写回 ads db_id 失败', e);}                
+                adsPending.splice(i,1);
+                adsChanged = true;
+              }
+            } else if(item.op === 'update' && item.table === 'advertisements' && item.id && item.payload){
+              const { error } = await supabaseClient.from('advertisements').update(item.payload).eq('id', item.id);
+              if(!error){ adsPending.splice(i,1); adsChanged = true; }
+            }
+          }catch(err){ console.warn('处理 ads pending 条目失败，稍后重试', err); }
+        }
+        setAdsPending(adsPending);
+
+        // 处理通知 pending
+        let noticesPending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]');
+        let noticesChanged = false;
+        for(let i=noticesPending.length-1;i>=0;i--){
+          const it = noticesPending[i];
+          try{
+            if(it.op === 'delete' && it.table === 'notices' && it.id){
+              const { error } = await supabaseClient.from('notices').delete().eq('id', it.id);
+              if(!error){ noticesPending.splice(i,1); noticesChanged = true; }
+            } else if(it.op === 'insert' && it.table === 'notices' && it.payload){
+              const { data, error } = await supabaseClient.from('notices').insert(it.payload).select('id, client_uuid').maybeSingle();
+              if(!error && data && data.id){
+                try{ const current = getNotices(); for(let j=0;j<current.length;j++){ if(!current[j].db_id && it.client_uuid && current[j].client_uuid && current[j].client_uuid===it.client_uuid){ current[j].db_id = data.id; break; } } setNotices(current); }catch(e){console.warn('写回 notices db_id 失败', e);}                
+                noticesPending.splice(i,1);
+                noticesChanged = true;
+              }
+            } else if(it.op === 'update' && it.table === 'notices' && it.id && it.payload){
+              const { error } = await supabaseClient.from('notices').update(it.payload).eq('id', it.id);
+              if(!error){ noticesPending.splice(i,1); noticesChanged = true; }
+            }
+          }catch(err){ console.warn('处理 notices pending 条目失败，稍后重试', err); }
+        }
+        setNoticePending(noticesPending);
+
+        // 如果有任何改动，通知前端刷新
+        if(adsChanged || noticesChanged){ notifyFrontendUpdate(); }
+      }finally{ _processingPending = false; }
+    }
+
+    // 页面加载时尝试处理一次 pending，并每5分钟重试
+    (function(){ processPendingQueues(); setInterval(processPendingQueues, 5*60*1000); })();
+
+    // ---------- 广告 pending 管理界面 ----------
+    // modal HTML（插入到页面末尾或合适位置）
+    const adsPendingModalHtml = `
+    <div id="ads-pending-modal" style="display:none;position:fixed;z-index:99999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:12px;padding:18px;max-width:800px;width:92%;max-height:80vh;overflow:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="margin:0;color:#2d8cf0;">广告 Pending 列表</h3>
+          <div>
+            <button id="ads-retry-all" style="margin-right:8px;">重试全部</button>
+            <button id="ads-clear-all">清空</button>
+            <button id="ads-pending-close" style="margin-left:12px;">关闭</button>
+          </div>
+        </div>
+        <div id="ads-pending-list" style="display:grid;gap:8px;"></div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', adsPendingModalHtml);
+
+    document.getElementById('ads-pending-close').onclick = function(){ document.getElementById('ads-pending-modal').style.display='none'; };
+    document.getElementById('ads-retry-all').onclick = function(){ retryAllPendingAds(); };
+    document.getElementById('ads-clear-all').onclick = function(){ if(confirm('确定要清空所有广告 pending 吗？此操作不可撤销')){ setAdsPending([]); renderPendingAds(); alert('已清空广告 pending 列表'); } };
+
+    function renderPendingAds(){
+      const list = getAdsPending();
+      const container = document.getElementById('ads-pending-list');
+      container.innerHTML = '';
+      if(!list.length){ container.innerHTML = '<div style="color:#666;text-align:center;padding:12px;">暂无 pending 条目</div>'; return; }
+      list.forEach((it, idx)=>{
+        const div = document.createElement('div');
+        div.style.border='1px dashed #ddd'; div.style.padding='10px'; div.style.borderRadius='6px';
+        const meta = document.createElement('div'); meta.style.marginBottom='8px'; meta.style.fontSize='0.9em'; meta.style.color='#333';
+        meta.textContent = `${it.op.toUpperCase()} ${it.table} ${it.id?('id='+it.id):''} ${it.client_uuid?('uuid='+it.client_uuid):''}`;
+        const body = document.createElement('div'); body.style.marginBottom='8px'; body.style.whiteSpace='pre-wrap'; body.textContent = JSON.stringify(it.payload||{}, null, 2);
+        const actions = document.createElement('div');
+        const retry = document.createElement('button'); retry.textContent='重试'; retry.onclick = ()=>retryPendingAd(idx);
+        const del = document.createElement('button'); del.textContent='删除'; del.style.marginLeft='8px'; del.onclick = ()=>{ if(confirm('删除此 pending 条目？')){ deletePendingAd(idx); } };
+        actions.appendChild(retry); actions.appendChild(del);
+        div.appendChild(meta); div.appendChild(body); div.appendChild(actions);
+        container.appendChild(div);
+      });
+    }
+
+    async function retryPendingAd(idx){
+      const list = getAdsPending();
+      const it = list[idx]; if(!it) return;
+      try{
+        if(it.op === 'delete' && it.id){
+          const { error } = await supabaseClient.from('advertisements').delete().eq('id', it.id);
+          if(!error){ list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('删除已同步到 Supabase'); return; }
+        } else if(it.op === 'insert' && it.payload){
+          const { data, error } = await supabaseClient.from('advertisements').insert(it.payload).select('id, client_uuid').maybeSingle();
+          if(!error && data && data.id){
+            try{ const current = getAdData(); ['banner','footer'].forEach(section=>{ (current[section]||[]).forEach(a=>{ if(!a.db_id && it.client_uuid && a.client_uuid && a.client_uuid===it.client_uuid){ a.db_id = data.id; } }); }); setAdData(current); }catch(e){console.warn('写回 ads db_id 失败', e);}                
+            list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('插入已同步到 Supabase'); return;
+          }
+        } else if(it.op === 'update' && it.id && it.payload){
+          const { error } = await supabaseClient.from('advertisements').update(it.payload).eq('id', it.id);
+          if(!error){ list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('更新已同步到 Supabase'); return; }
+        }
+        alert('重试失败，可能仍然是权限/网络问题');
+      }catch(err){ console.warn('重试 pending 广告失败', err); alert('重试发生错误，请查看控制台'); }
+    }
+
+    async function retryAllPendingAds(){
+      const list = getAdsPending();
+      for(let i=list.length-1;i>=0;i--){ await retryPendingAd(i); }
+    }
+
+    function deletePendingAd(idx){
+      const list = getAdsPending(); list.splice(idx,1); setAdsPending(list); renderPendingAds();
+    }
+
+    // 在适当位置提供一个打开 modal 的按钮（页面顶部或管理面板）
+    (function(){
+      const openBtn = document.createElement('button'); openBtn.textContent='广告 Pending 管理'; openBtn.style.marginLeft='8px';
+      openBtn.onclick = function(){ renderPendingAds(); document.getElementById('ads-pending-modal').style.display='flex'; };
+      // 尝试挂载到 admin 工具栏（如果存在）
+      const toolbar = document.querySelector('#admin-toolbar') || document.body;
+      toolbar.insertBefore(openBtn, toolbar.firstChild);
+    })();
   </script>
 </body>
 </html> 

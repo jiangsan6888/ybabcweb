@@ -1922,8 +1922,19 @@
 
     // 页面加载后如果 supabase 可用则立即同步一次并每30秒同步
     (function(){ if(supabaseClient){ syncFromSupabase(); setInterval(syncFromSupabase, 30000); } })();
+
+    // 监听来自 admin 的更新通知，立即触发一次同步
+    window.addEventListener('storage', function(e){
+      if(e.key === 'abc_last_update'){
+        console.log('检测到后台更新标记，触发同步');
+        if(typeof syncFromSupabase === 'function') syncFromSupabase();
+      }
+    });
     window.addEventListener('storage', function(e){
       if(e.key==='abc_notices') renderNoticeMarquee();
+      if(e.key==='abc_ads'){
+        if(typeof renderAds === 'function') renderAds();
+      }
     });
     
     // 更多游戏功能
