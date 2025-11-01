@@ -427,7 +427,9 @@
     }
     
     function setAdData(data) {
-      localStorage.setItem('abc_ads', JSON.stringify(data));
+  localStorage.setItem('abc_ads', JSON.stringify(data));
+  try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
+  try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
     }
     function createAdItem(ad, type, idx) {
       // type: 'banner' or 'footer'
@@ -557,6 +559,13 @@
       });
       const newData = { banner: clean(data.banner), footer: clean(data.footer) };
       setAdData(newData);
+
+      // 如果启用了仅本地同步，跳过远端写入并通知前端刷新
+      if (localStorage.getItem('abc_local_only') === '1') {
+        try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
+        alert('广告已保存（仅本地模式）。已通知前端刷新。');
+        return;
+      }
 
       // ------- 写入Supabase广告表，失败时输出详细错误 -------
       if (supabaseClient) {
@@ -723,7 +732,9 @@
     }
     
     function setNotices(data) {
-      localStorage.setItem('abc_notices', JSON.stringify(data));
+  localStorage.setItem('abc_notices', JSON.stringify(data));
+  try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
+  try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
     }
     function createNoticeItem(notice, idx) {
   const dbAttr = notice && notice.db_id ? `data-db-id='${notice.db_id}'` : '';
@@ -826,6 +837,13 @@
       const notices = getNotices();
       // 先本地保存（local-first），保证管理员立即看到
       setNotices(notices);
+
+      // 如果启用了仅本地同步，跳过远端写入并通知前端刷新
+      if (localStorage.getItem('abc_local_only') === '1') {
+        try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
+        alert('通知已保存（仅本地模式）。已通知前端刷新。');
+        return;
+      }
 
       if (supabaseClient) {
         let succ = 0, fail = 0, failMsg = '';
@@ -1150,6 +1168,18 @@
       // 尝试挂载到 admin 工具栏（如果存在）
       const toolbar = document.querySelector('#admin-toolbar') || document.body;
       toolbar.insertBefore(openBtn, toolbar.firstChild);
+    })();
+
+    // ---------- 本地同步开关（仅本地，不写入数据库） ----------
+    (function(){
+      function getLocalOnly(){ return localStorage.getItem('abc_local_only') === '1'; }
+      function setLocalOnly(v){ localStorage.setItem('abc_local_only', v ? '1' : '0'); }
+      const chk = document.createElement('input'); chk.type='checkbox'; chk.id='abc-local-only'; chk.style.marginLeft='12px'; chk.checked = getLocalOnly();
+      const lbl = document.createElement('label'); lbl.htmlFor='abc-local-only'; lbl.textContent='仅本地同步（不写入数据库）'; lbl.style.marginLeft='6px'; lbl.style.color='#555';
+      chk.onchange = function(){ setLocalOnly(chk.checked); alert('仅本地同步已 ' + (chk.checked? '启用' : '禁用') + '（页面将只在本地同步，不写远端 DB）'); };
+      const container = document.querySelector('#admin-toolbar') || document.body;
+      container.insertBefore(chk, container.firstChild);
+      container.insertBefore(lbl, container.firstChild);
     })();
   </script>
 </body>
