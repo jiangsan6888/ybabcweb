@@ -471,7 +471,7 @@
         const type = parent.parentElement.id==='ad-banner-list'?'banner':'footer';
         const idx = Array.from(parent.parentElement.children).indexOf(parent);
         const file = input.files[0];
-        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
+  if(!file.type.match(/^image\//)) { alert('仅支持图片文件（jpg/png/gif/webp 等）'); return; }
         if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
         const reader = new FileReader();
         reader.onload = function(ev){
@@ -700,7 +700,7 @@
         const items = Array.from(parent.parentElement.querySelectorAll('.notice-item'));
         const idx = items.indexOf(parent);
         const file = input.files[0];
-        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
+  if(!file.type.match(/^image\//)) { alert('仅支持图片文件（jpg/png/gif/webp 等）'); return; }
         if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
         const reader = new FileReader();
         reader.onload = function(ev){

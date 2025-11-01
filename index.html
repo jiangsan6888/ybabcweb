@@ -569,35 +569,51 @@
     }
     // 广告管理逻辑
     async function getAdData() {
+      // 优先使用本地数据（如果 admin 在本地已发布或断网），以保证本地上传的广告图片能即时显示
+      try {
+        const rawLocal = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
+        const hasLocal = (rawLocal && ((rawLocal.banner && rawLocal.banner.length>0) || (rawLocal.footer && rawLocal.footer.length>0)));
+        const normalizeArr = (arr)=> (arr||[]).map(item=>{
+          if(typeof item === 'string') { return { text: item, imgs: [] }; }
+          if(item && typeof item === 'object') {
+            return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
+          }
+          return { text: '', imgs: [] };
+        });
+        if (hasLocal) {
+          return { banner: normalizeArr(rawLocal.banner), footer: normalizeArr(rawLocal.footer) };
+        }
+      } catch(e) {
+        console.warn('解析本地 abc_ads 失败，继续尝试 Supabase:', e);
+      }
+
+      // 若本地无数据则尝试从 Supabase 读取（如可用）
       if(supabaseClient){
-        const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
-        if(!error && data && data.length){
-          const adData = { banner: [], footer: [] };
-          data.forEach(ad => {
-            const typeVal = ad.ad_type || ad.type; // 兼容两种字段
-            let imgs = ad.imgs;
-            // imgs 在数据库中可能为 JSON 字符串或数组，或 null
-            if (typeof imgs === 'string') {
-              try { imgs = JSON.parse(imgs); } catch (e) { imgs = imgs ? [imgs] : []; }
-            }
-            if (!Array.isArray(imgs)) imgs = imgs ? [imgs] : [];
-            const obj = { text: ad.content || '', imgs: imgs.filter(Boolean) };
-            if(typeVal === 'banner') adData.banner.push(obj);
-            if(typeVal === 'footer') adData.footer.push(obj);
-          });
-          return adData;
+        try {
+          const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
+          if(!error && data && data.length){
+            const adData = { banner: [], footer: [] };
+            data.forEach(ad => {
+              const typeVal = ad.ad_type || ad.type; // 兼容两种字段
+              let imgs = ad.imgs;
+              // imgs 在数据库中可能为 JSON 字符串或数组，或 null
+              if (typeof imgs === 'string') {
+                try { imgs = JSON.parse(imgs); } catch (e) { imgs = imgs ? [imgs] : []; }
+              }
+              if (!Array.isArray(imgs)) imgs = imgs ? [imgs] : [];
+              const obj = { text: ad.content || '', imgs: imgs.filter(Boolean) };
+              if(typeVal === 'banner') adData.banner.push(obj);
+              if(typeVal === 'footer') adData.footer.push(obj);
+            });
+            return adData;
+          }
+        } catch (err) {
+          console.warn('从 Supabase 获取广告失败，回退本地:', err);
         }
       }
-      // 断网用本地
-      const raw = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
-      const normalizeArr = (arr)=> (arr||[]).map(item=>{
-        if(typeof item === 'string') { return { text: item, imgs: [] }; }
-        if(item && typeof item === 'object') {
-          return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
-        }
-        return { text: '', imgs: [] };
-      });
-      return { banner: normalizeArr(raw.banner), footer: normalizeArr(raw.footer) };
+
+      // 最终回退：空数据
+      return { banner: [], footer: [] };
     }
 
     function setAdData(data) {
