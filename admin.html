@@ -176,12 +176,11 @@
       const isOnline = updateAdminNetworkStatus();
       
       if (isOnline) {
-        // 检测Supabase连接
-        fetch('https://rfbjjgzmdtmvjxfbmvpm.supabase.co/rest/v1/', {
-          method: 'HEAD',
-          mode: 'no-cors'
-        }).catch(() => {
-          console.warn('Supabase连接检测失败，但系统仍可正常使用（使用本地存储）');
+        // 使用 validateSupabaseClient 来检测 Supabase 可用性（避免无效 HEAD 导致 401 噪音）
+        validateSupabaseClient().then(ok=>{
+          if(!ok) console.warn('Supabase 验证失败或无权限，系统将回退到本地存储模式');
+        }).catch(()=>{
+          console.warn('Supabase 验证异常，系统将回退到本地存储模式');
         });
       }
       
@@ -559,7 +558,14 @@
             if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); }
             else succ++;
           } catch (err) {
+            // 遇到异常（如 401/网络等）时，将 payload 暂存到本地 pending 队列，便于后续重试与审核
             fail++; failMsg = String(err); console.error('广告写入异常(footer):', { payload, err });
+            try {
+              const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]');
+              pending.push(payload);
+              localStorage.setItem('abc_ads_pending', JSON.stringify(pending));
+              console.warn('已将失败的广告写入 pending 队列（abc_ads_pending）');
+            } catch(e) { console.error('写入 pending 队列失败', e); }
           }
         }
         if (succ>0) {
