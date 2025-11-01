@@ -420,13 +420,14 @@
     }
     function createAdItem(ad, type, idx) {
       // type: 'banner' or 'footer'
-      return `<div class="ad-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+  const dbAttr = ad && ad.db_id ? `data-db-id='${ad.db_id}'` : '';
+  return `<div class="ad-item" ${dbAttr} style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
         <textarea placeholder="广告文字" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${ad.text||''}</textarea>
         <div class="ad-imgs" style="display:flex;gap:8px;margin:8px 0 0 0;flex-wrap:wrap;">
           ${(ad.imgs||[]).map((img,i)=>`<div style='position:relative;display:inline-block;'><img src='${img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-type='${type}' data-adidx='${idx}' data-imgidx='${i}' class='del-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`).join('')}
           ${(ad.imgs||[]).length<3?`<label style='width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;border:1px dashed #2d8cf0;border-radius:6px;cursor:pointer;background:#f7faff;'><span style='font-size:2em;color:#2d8cf0;'>+</span><input type='file' accept='image/*' style='display:none;'></label>`:''}
         </div>
-        <button type="button" class="btn del-ad-btn" data-type="${type}" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
+  <button type="button" class="btn del-ad-btn" data-type="${type}" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
       </div>`;
     }
     async function renderAdForm() {
@@ -457,6 +458,24 @@
       if(target.classList.contains('del-ad-btn')) {
         const type = target.dataset.type, idx = +target.dataset.idx;
         const adData = getAdData();
+        // 如果该广告有 db_id，尝试删除数据库记录
+        const parent = target.closest('.ad-item');
+        const dbId = parent ? parent.getAttribute('data-db-id') : null;
+        if(dbId && supabaseClient){
+          (async ()=>{
+            try{
+              const { error } = await supabaseClient.from('advertisements').delete().eq('id', dbId);
+              if(error){
+                // 写入 pending delete
+                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);}
+                console.warn('数据库删除广告失败，已加入 pending', error);
+              }
+            }catch(err){
+              try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);} 
+              console.error('删除广告异常，已加入 pending', err);
+            }
+          })();
+        }
         adData[type].splice(idx,1);
         setAdData(adData);
         renderAdForm();
@@ -503,13 +522,13 @@
     // 新增广告
     document.getElementById('add-banner-ad').onclick = function() {
       const adData = getAdData();
-      adData.banner.push({text:'',imgs:[]});
+  adData.banner.push({text:'',imgs:[], created_at: new Date().toISOString()});
       setAdData(adData);
       renderAdForm();
     };
     document.getElementById('add-footer-ad').onclick = function() {
       const adData = getAdData();
-      adData.footer.push({text:'',imgs:[]});
+  adData.footer.push({text:'',imgs:[], created_at: new Date().toISOString()});
       setAdData(adData);
       renderAdForm();
     };
@@ -539,11 +558,27 @@
             created_at: new Date().toISOString()
           };
           try {
-            const { error } = await supabaseClient.from('advertisements').insert(payload);
-            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error }); }
-            else succ++;
+            if(ad.db_id){
+              // update existing
+              const { error } = await supabaseClient.from('advertisements').update(payload).eq('id', ad.db_id);
+              if(error){ fail++; failMsg = error.message||String(error); console.error('广告更新失败(banner):', { payload, error });
+                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
+              else succ++;
+            } else {
+              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id').maybeSingle();
+              if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error });
+                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
+              else { succ++; if(inserted && inserted.id){ /* 写回 localStorage，使用 created_at 匹配注入 db_id */
+                  const current = getAdData();
+                  const arr = current.banner || [];
+                  for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } }
+                  setAdData(current);
+                }
+              }
+            }
           } catch (err) {
             fail++; failMsg = String(err); console.error('广告写入异常(banner):', { payload, err });
+            try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op: ad.db_id? 'update':'insert', table:'advertisements', id: ad.db_id||null, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} 
           }
         }
         // 底部广告
@@ -557,15 +592,21 @@
             created_at: new Date().toISOString()
           };
           try {
-            const { error } = await supabaseClient.from('advertisements').insert(payload);
-            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); }
-            else succ++;
+            if(ad.db_id){
+              const { error } = await supabaseClient.from('advertisements').update(payload).eq('id', ad.db_id);
+              if(error){ fail++; failMsg = error.message||String(error); console.error('广告更新失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
+              else succ++;
+            } else {
+              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id').maybeSingle();
+              if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
+              else { succ++; if(inserted && inserted.id){ const current = getAdData(); const arr = current.footer || []; for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } } setAdData(current); } }
+            }
           } catch (err) {
             // 遇到异常（如 401/网络等）时，将 payload 暂存到本地 pending 队列，便于后续重试与审核
             fail++; failMsg = String(err); console.error('广告写入异常(footer):', { payload, err });
             try {
               const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]');
-              pending.push(payload);
+              pending.push({ op: ad.db_id? 'update':'insert', table:'advertisements', id: ad.db_id||null, payload, created_at:new Date().toISOString() });
               localStorage.setItem('abc_ads_pending', JSON.stringify(pending));
               console.warn('已将失败的广告写入 pending 队列（abc_ads_pending）');
             } catch(e) { console.error('写入 pending 队列失败', e); }
@@ -664,7 +705,8 @@
       localStorage.setItem('abc_notices', JSON.stringify(data));
     }
     function createNoticeItem(notice, idx) {
-      return `<div class="notice-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+  const dbAttr = notice && notice.db_id ? `data-db-id='${notice.db_id}'` : '';
+  return `<div class="notice-item" ${dbAttr} style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
         <textarea placeholder="通知内容" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${notice.text||''}</textarea>
         <div style="margin:8px 0 0 0;display:flex;align-items:center;gap:8px;">
           ${notice.img?`<div style='position:relative;display:inline-block;'><img src='${notice.img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-idx='${idx}' class='del-notice-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`:''}
@@ -694,6 +736,19 @@
       // 删除通知
       if(target.classList.contains('del-notice-btn')) {
         const idx = +target.dataset.idx;
+        const parent = target.closest('.notice-item');
+        const dbId = parent ? parent.getAttribute('data-db-id') : null;
+        if(dbId && supabaseClient){
+          (async ()=>{
+            try{
+              const { error } = await supabaseClient.from('notices').delete().eq('id', dbId);
+              if(error){
+                try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} 
+                console.warn('数据库删除通知失败，已加入 pending', error);
+              }
+            }catch(err){ try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} console.error('删除通知异常，已加入 pending', err); }
+          })();
+        }
         const notices = getNotices();
         notices.splice(idx,1);
         setNotices(notices);
@@ -737,11 +792,11 @@
       const notices = getNotices();
       const now = new Date();
       const time = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
-      notices.unshift({text:'',img:'',time});
+  notices.unshift({text:'',img:'',time, created_at: new Date().toISOString()});
       setNotices(notices);
       renderNoticeForm();
     };
-    // 保存通知（新增Supabase远程写入）
+    // 保存通知（支持 update/insert 到 Supabase，并在失败时写入 pending）
     document.getElementById('notice-form').onsubmit = async function(e){
       e.preventDefault();
       const notices = getNotices();
@@ -760,18 +815,46 @@
             created_at: new Date().toISOString()
           };
           try {
-            const { error } = await supabaseClient.from('notices').insert(payload);
-            if (error) { fail++; failMsg = error.message || String(error); console.error('通知写入失败:', { payload, error });
-              // 将失败记录到 pending 队列，便于人工/自动重试
-              try { const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push(payload); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); } catch(e){ console.error('写入通知 pending 失败', e); }
-            } else succ++;
+            if(n.db_id){
+              // update existing notice
+              const { error } = await supabaseClient.from('notices').update(payload).eq('id', n.db_id);
+              if(error){
+                fail++; failMsg = error.message || String(error);
+                console.error('通知更新失败:', { payload, error });
+                try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'update', table:'notices', id:n.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
+              } else {
+                succ++;
+              }
+            } else {
+              const { data: inserted, error } = await supabaseClient.from('notices').insert(payload).select('id').maybeSingle();
+              if(error){
+                fail++; failMsg = error.message || String(error);
+                console.error('通知写入失败:', { payload, error });
+                try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'insert', table:'notices', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
+              } else {
+                succ++;
+                if(inserted && inserted.id){
+                  // 写回 localStorage: 尝试在本地匹配刚插入的通知并记录 db_id
+                  try{
+                    const current = getNotices();
+                    for(let i=0;i<current.length;i++){
+                      if(!current[i].db_id && current[i].text===n.text && (current[i].img||'')===(n.img||'')){
+                        current[i].db_id = inserted.id;
+                        break;
+                      }
+                    }
+                    setNotices(current);
+                  }catch(e){ console.warn('写回 db_id 到 localStorage 失败', e); }
+                }
+              }
+            }
           } catch (err) {
             fail++; failMsg = String(err); console.error('通知写入异常:', { payload, err });
-            try { const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push(payload); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); } catch(e){ console.error('写入通知 pending 失败', e); }
+            try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op: n.db_id? 'update':'insert', table:'notices', id: n.db_id||null, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入通知 pending 失败', e); }
           }
         }
         if (succ>0) alert(`有 ${succ} 条通知已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
-        else alert('未能成功存储到数据库（通知）。请检查网络/权限/表结构，已本地保存。');
+        else alert('未能成功存储到数据库（通知）。请检查网络/权限/表结构，数据已本地保存。');
         return;
       }
       // 离线回退：仅本地保存（已保存）

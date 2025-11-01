@@ -1753,19 +1753,41 @@
     }
     // 通知弹窗逻辑
     // 优先从 Supabase 读取（如果客户端可用且有权限），否则回退到 localStorage
+    // 辅助：规范化通知的 img 字段（支持数组、JSON 字符串或单个字符串）
+    function normalizeNoticeImg(img){
+      if(!img) return '';
+      // 已是数组
+      if(Array.isArray(img)) return img.length?img[0]:'';
+      // 字符串，可能是 JSON 数组或单字符串
+      if(typeof img === 'string'){
+        const s = img.trim();
+        if(!s) return '';
+        // 尝试解析 JSON 数组字符串
+        if((s.startsWith('[') && s.endsWith(']')) || s.startsWith('"[')){
+          try{ const parsed = JSON.parse(s); if(Array.isArray(parsed)) return parsed.length?parsed[0]:''; }catch(e){ /* ignore */ }
+        }
+        return s;
+      }
+      // 其他类型，返回空
+      return '';
+    }
     async function fetchNotices() {
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.from('notices').select('content, img, time').order('created_at', { ascending: false });
           if (!error && data) {
-            return (data||[]).map(n => ({ text: n.content || '', img: n.img || '', time: n.time || '' }));
+            return (data||[]).map(n => ({ text: n.content || '', img: normalizeNoticeImg(n.img), time: n.time || '' }));
           }
         } catch (err) {
           console.warn('从 Supabase 获取通知失败，回退本地：', err);
         }
       }
       // 回退到本地
-      return JSON.parse(localStorage.getItem('abc_notices')||'[]');
+      // 本地数据可能包含 img 字段或数组，统一处理
+      try{
+        const local = JSON.parse(localStorage.getItem('abc_notices')||'[]');
+        return (local||[]).map(n=>({ text: n.text||'', img: normalizeNoticeImg(n.img||n.imgs||''), time: n.time||'' }));
+      }catch(e){ return []; }
     }
 
     function renderNoticeListView() {
@@ -1776,7 +1798,7 @@
           return;
         }
         // 渲染并为每条通知绑定点击事件（图片预览/详情）
-        list.innerHTML = notices.map((n,i)=>`<div class='notice-list-item' data-idx='${i}' style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;cursor:pointer;'>${n.img?`<img src='${n.img}' class='notice-thumb' data-idx='${i}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;'>`:''}<div style='flex:1;'><div class='notice-text' style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div class='notice-time' style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
+  list.innerHTML = notices.map((n,i)=>`<div class='notice-list-item' data-idx='${i}' style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;cursor:pointer;'>${n.img?`<img src='${n.img}' class='notice-thumb' data-idx='${i}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;' onerror="this.style.display='none';console.warn('通知图片加载失败: ', this.src)">`:''}<div style='flex:1;'><div class='notice-text' style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div class='notice-time' style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
         // 绑定点击事件：点击图片或条目显示详情
         Array.from(list.querySelectorAll('.notice-thumb')).forEach(img=>{
           img.onclick = function(e){
@@ -1858,6 +1880,48 @@
       });
     }
     renderNoticeMarquee();
+
+    // 定期从 Supabase 同步数据到 localStorage（使后台变更尽快反映到前端）
+    async function syncFromSupabase(){
+      if(!supabaseClient) return;
+      try{
+        // 同步广告
+        const { data: adsData, error: adsErr } = await supabaseClient.from('advertisements').select('ad_type,type,content,imgs,created_at').order('created_at', { ascending: false }).limit(50);
+        if(!adsErr && adsData){
+          // 归一化为本地结构
+          const local = { banner: [], footer: [] };
+          (adsData||[]).forEach(a=>{
+            const imgs = (typeof a.imgs==='string' ? (()=>{ try{ const p=JSON.parse(a.imgs); return Array.isArray(p)?p: [a.imgs]; }catch(e){ return [a.imgs]; } })() : (Array.isArray(a.imgs)?a.imgs: (a.imgs? [a.imgs] : [])));
+            const item = { text: a.content||'', imgs: imgs };
+            if((a.ad_type||a.type)=='footer') local.footer.push(item); else local.banner.push(item);
+          });
+          localStorage.setItem('abc_ads', JSON.stringify(local));
+          // 触发渲染
+          if(typeof renderAds === 'function') renderAds();
+        }
+
+        // 同步通知
+        const { data: noticeData, error: noticeErr } = await supabaseClient.from('notices').select('content,img,time,created_at').order('created_at', { ascending: false }).limit(50);
+        if(!noticeErr && noticeData){
+          const normalized = (noticeData||[]).map(n=>({ text: n.content||'', img: n.img||'', time: n.time||'', created_at: n.created_at }));
+          localStorage.setItem('abc_notices', JSON.stringify(normalized));
+          // 更新跑马和模态列表
+          if(typeof renderNoticeMarquee === 'function') renderNoticeMarquee();
+          if(document.getElementById('notice-modal') && document.getElementById('notice-modal').style.display==='flex' && typeof renderNoticeListView === 'function') renderNoticeListView();
+        }
+
+        // 同步聊天消息（如果表名不同请修改）
+        const { data: msgsData, error: msgsErr } = await supabaseClient.from('messages').select('user, text, img, time').order('created_at', { ascending: false }).limit(200);
+        if(!msgsErr && msgsData){
+          const msgs = (msgsData||[]).map(m=>({ user: m.user||'guest', text: m.text||'', img: m.img||'', time: m.time||'' })).reverse();
+          localStorage.setItem('abc_chat_msgs', JSON.stringify(msgs));
+          if(typeof renderChatMsgs === 'function') renderChatMsgs();
+        }
+      }catch(err){ console.warn('同步 Supabase 失败：', err); }
+    }
+
+    // 页面加载后如果 supabase 可用则立即同步一次并每30秒同步
+    (function(){ if(supabaseClient){ syncFromSupabase(); setInterval(syncFromSupabase, 30000); } })();
     window.addEventListener('storage', function(e){
       if(e.key==='abc_notices') renderNoticeMarquee();
     });
