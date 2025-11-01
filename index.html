@@ -465,6 +465,29 @@
     } catch (error) {
       console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
     }
+
+    // 验证 Supabase 客户端是否有权限可用；如遇 401 或 权限错误则回退到本地模式
+    async function validateSupabaseClient() {
+      if (!supabaseClient) return false;
+      try {
+        const { data, error, status } = await supabaseClient.from('members').select('id').limit(1).maybeSingle();
+        if (error) {
+          console.warn('Supabase 验证失败:', error, 'status:', status);
+          if (status === 401 || (error && String(error).toLowerCase().includes('jwt'))) {
+            supabaseClient = null;
+            console.warn('Supabase 授权失败，回退到本地存储模式');
+            return false;
+          }
+        }
+        return true;
+      } catch (err) {
+        console.warn('Supabase 验证异常，回退本地:', err);
+        supabaseClient = null;
+        return false;
+      }
+    }
+
+    (async ()=>{ await validateSupabaseClient(); })();
     // 会员登录/注册逻辑
     const userBar = document.getElementById('user-bar');
     const loginBtn = document.getElementById('login-btn');

@@ -112,6 +112,32 @@
     } catch (error) {
       console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
     }
+
+    // 验证 Supabase 客户端是否有权限可用（避免 anon key 被拒导致页面继续使用但请求 401）
+    async function validateSupabaseClient() {
+      if (!supabaseClient) return false;
+      try {
+        // 做一个小查询以检测权限（members 表通常存在）。如果返回错误或 401，则回退本地模式
+        const { data, error, status } = await supabaseClient.from('members').select('id').limit(1).maybeSingle();
+        if (error) {
+          console.warn('Supabase 验证失败:', error, 'status:', status);
+          // 如果是授权错误或其他不可恢复错误，禁用 supabaseClient
+          if (status === 401 || (error && String(error).toLowerCase().includes('jwt')) ) {
+            supabaseClient = null;
+            console.warn('Supabase 授权失败，回退到本地存储模式');
+            return false;
+          }
+        }
+        return true;
+      } catch (err) {
+        console.warn('Supabase 验证异常，回退本地:', err);
+        supabaseClient = null;
+        return false;
+      }
+    }
+
+    // 立即验证（不阻塞页面渲染）
+    (async ()=>{ await validateSupabaseClient(); })();
     
     // 管理员权限验证
     async function checkAdminAuth() {
