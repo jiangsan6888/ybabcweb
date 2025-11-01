@@ -1936,6 +1936,24 @@
         if(typeof renderAds === 'function') renderAds();
       }
     });
+    // BroadcastChannel 跨标签页即时同步
+    try{
+      if(typeof BroadcastChannel !== 'undefined'){
+        const bc = new BroadcastChannel('ybabc_channel');
+        bc.onmessage = function(ev){
+          try{
+            const msg = ev.data || {};
+            if(msg.type === 'ads_update'){
+              if(typeof renderAds === 'function') renderAds();
+            }
+            if(msg.type === 'notices_update'){
+              if(typeof renderNoticeMarquee === 'function') renderNoticeMarquee();
+              if(document.getElementById('notice-modal') && document.getElementById('notice-modal').style.display==='flex' && typeof renderNoticeListView === 'function') renderNoticeListView();
+            }
+          }catch(e){ console.warn('BroadcastChannel 消息处理错误', e); }
+        };
+      }
+    }catch(e){ console.warn('不支持 BroadcastChannel', e); }
     
     // 更多游戏功能
     function showMoreGamesModal() {

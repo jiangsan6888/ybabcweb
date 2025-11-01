@@ -430,6 +430,7 @@
   localStorage.setItem('abc_ads', JSON.stringify(data));
   try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
   try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
+  try{ if(typeof BroadcastChannel !== 'undefined'){ const bc = new BroadcastChannel('ybabc_channel'); bc.postMessage({type:'ads_update', ts: Date.now()}); bc.close(); } }catch(e){}
     }
     function createAdItem(ad, type, idx) {
       // type: 'banner' or 'footer'
@@ -735,6 +736,7 @@
   localStorage.setItem('abc_notices', JSON.stringify(data));
   try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
   try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
+  try{ if(typeof BroadcastChannel !== 'undefined'){ const bc = new BroadcastChannel('ybabc_channel'); bc.postMessage({type:'notices_update', ts: Date.now()}); bc.close(); } }catch(e){}
     }
     function createNoticeItem(notice, idx) {
   const dbAttr = notice && notice.db_id ? `data-db-id='${notice.db_id}'` : '';
