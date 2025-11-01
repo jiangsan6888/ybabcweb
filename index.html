@@ -1752,17 +1752,72 @@
       alert('游戏上传成功！');
     }
     // 通知弹窗逻辑
-    function getNotices() {
+    // 优先从 Supabase 读取（如果客户端可用且有权限），否则回退到 localStorage
+    async function fetchNotices() {
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('notices').select('content, img, time').order('created_at', { ascending: false });
+          if (!error && data) {
+            return (data||[]).map(n => ({ text: n.content || '', img: n.img || '', time: n.time || '' }));
+          }
+        } catch (err) {
+          console.warn('从 Supabase 获取通知失败，回退本地：', err);
+        }
+      }
+      // 回退到本地
       return JSON.parse(localStorage.getItem('abc_notices')||'[]');
     }
+
     function renderNoticeListView() {
-      const notices = getNotices();
       const list = document.getElementById('notice-list-view');
-      if(!notices.length) {
+      fetchNotices().then(notices => {
+        if(!notices || !notices.length) {
+          list.innerHTML = '<div style="color:#888;text-align:center;padding:40px 0;">暂无通知</div>';
+          return;
+        }
+        // 渲染并为每条通知绑定点击事件（图片预览/详情）
+        list.innerHTML = notices.map((n,i)=>`<div class='notice-list-item' data-idx='${i}' style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;cursor:pointer;'>${n.img?`<img src='${n.img}' class='notice-thumb' data-idx='${i}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;'>`:''}<div style='flex:1;'><div class='notice-text' style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div class='notice-time' style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
+        // 绑定点击事件：点击图片或条目显示详情
+        Array.from(list.querySelectorAll('.notice-thumb')).forEach(img=>{
+          img.onclick = function(e){
+            e.stopPropagation();
+            const idx = +this.dataset.idx;
+            showNoticeDetail(notices[idx]);
+          };
+        });
+        Array.from(list.querySelectorAll('.notice-list-item')).forEach(item=>{
+          item.onclick = function(){
+            const idx = +this.dataset.idx;
+            showNoticeDetail(notices[idx]);
+          };
+        });
+      }).catch(err=>{
+        console.error('渲染通知列表失败：', err);
         list.innerHTML = '<div style="color:#888;text-align:center;padding:40px 0;">暂无通知</div>';
-        return;
+      });
+    }
+    // 通知详情弹窗（图片预览或文本详情）
+    if(!document.getElementById('notice-detail-modal')){
+      const nmodal = document.createElement('div');
+      nmodal.id = 'notice-detail-modal';
+      nmodal.style = 'display:none;position:fixed;z-index:20002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);justify-content:center;align-items:center;';
+      nmodal.innerHTML = `<div id='notice-detail-content' style='background:#fff;border-radius:14px;box-shadow:0 4px 24px #0003;padding:24px;max-width:90vw;max-height:80vh;overflow:auto;position:relative;text-align:center;'></div>`+
+        `<button id='notice-detail-close' style='position:absolute;top:12px;right:18px;background:none;border:none;font-size:2em;color:#2d8cf0;cursor:pointer;z-index:10;'>×</button>`;
+      document.body.appendChild(nmodal);
+      document.getElementById('notice-detail-close').onclick = ()=>{ nmodal.style.display='none'; };
+      nmodal.onclick = function(e){ if(e.target===nmodal) nmodal.style.display='none'; };
+    }
+    function showNoticeDetail(notice){
+      const modal = document.getElementById('notice-detail-modal');
+      const content = document.getElementById('notice-detail-content');
+      let imgsHtml = '';
+      if(notice.img){
+        imgsHtml = `<img src='${notice.img}' style='max-width:90vw;max-height:60vh;border-radius:10px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,0.15);'>`;
       }
-      list.innerHTML = notices.map(n=>`<div style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;'>${n.img?`<img src='${n.img}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;'>`:''}<div style='flex:1;'><div style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
+      const textHtml = notice.text?`<div style='font-size:1.1em;color:#2d8cf0;margin-top:8px;'>${notice.text}</div>`:'';
+      const timeHtml = notice.time?`<div style='font-size:0.9em;color:#888;margin-top:6px;'>${notice.time}</div>`:'';
+      content.innerHTML = imgsHtml + textHtml + timeHtml;
+      modal.style.display = 'flex';
     }
     document.getElementById('notice-btn').onclick = function(){
       renderNoticeListView();
@@ -1774,29 +1829,33 @@
     document.getElementById('notice-modal').onclick = function(e){
       if(e.target===this) this.style.display='none';
     };
-    // 首页通知横向滚动条
+    // 首页通知横向滚动条（从 Supabase 或本地读取）
     function renderNoticeMarquee() {
-      const notices = getNotices();
-      const texts = notices.map(n=>n.text).filter(Boolean);
       const marquee = document.getElementById('notice-marquee');
       if(!marquee) return;
-      if(!texts.length) {
-        marquee.textContent = '暂无通知';
-        return;
-      }
-      marquee.textContent = texts.join('    |    ');
-      let pos = document.getElementById('notice-marquee-wrap').offsetWidth;
-      marquee.style.left = pos + 'px';
-      function step() {
-        pos -= 1;
-        marquee.style.left = pos + 'px';
-        if(pos + marquee.offsetWidth < 0) {
-          pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+      fetchNotices().then(notices => {
+        const texts = (notices||[]).map(n=>n.text).filter(Boolean);
+        if(!texts.length) {
+          marquee.textContent = '暂无通知';
+          return;
         }
-        marquee._marqueeTimer = requestAnimationFrame(step);
-      }
-      if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
-      step();
+        marquee.textContent = texts.join('    |    ');
+        let pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+        marquee.style.left = pos + 'px';
+        function step() {
+          pos -= 1;
+          marquee.style.left = pos + 'px';
+          if(pos + marquee.offsetWidth < 0) {
+            pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+          }
+          marquee._marqueeTimer = requestAnimationFrame(step);
+        }
+        if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
+        step();
+      }).catch(err=>{
+        console.warn('获取通知失败，回退本地：', err);
+        marquee.textContent = '暂无通知';
+      });
     }
     renderNoticeMarquee();
     window.addEventListener('storage', function(e){
