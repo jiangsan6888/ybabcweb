@@ -1889,13 +1889,47 @@
         const { data: adsData, error: adsErr } = await supabaseClient.from('advertisements').select('ad_type,type,content,imgs,created_at').order('created_at', { ascending: false }).limit(50);
         if(!adsErr && adsData){
           // 归一化为本地结构
-          const local = { banner: [], footer: [] };
+          const rawLocal = { banner: [], footer: [] };
           (adsData||[]).forEach(a=>{
             const imgs = (typeof a.imgs==='string' ? (()=>{ try{ const p=JSON.parse(a.imgs); return Array.isArray(p)?p: [a.imgs]; }catch(e){ return [a.imgs]; } })() : (Array.isArray(a.imgs)?a.imgs: (a.imgs? [a.imgs] : [])));
             const item = { text: a.content||'', imgs: imgs };
-            if((a.ad_type||a.type)=='footer') local.footer.push(item); else local.banner.push(item);
+            if((a.ad_type||a.type)=='footer') rawLocal.footer.push(item); else rawLocal.banner.push(item);
           });
-          localStorage.setItem('abc_ads', JSON.stringify(local));
+
+          // 图片裁剪：避免将过大的 dataURI 写入 localStorage 导致配额溢出
+          function sanitizeAdsForLocal(src){
+            const MAX_IMG_SIZE = 100 * 1024; // 100KB
+            const out = { banner: [], footer: [] };
+            ['banner','footer'].forEach(section=>{
+              (src[section]||[]).forEach(it=>{
+                const safeImgs = (it.imgs||[]).map(img=>{
+                  try{
+                    if(!img) return '';
+                    if(typeof img==='string' && img.startsWith('data:') && img.length > MAX_IMG_SIZE){
+                      console.warn('移除过大图片以避免 localStorage 超限');
+                      return '';
+                    }
+                    return img;
+                  }catch(e){ return ''; }
+                });
+                out[section].push({ text: it.text||'', imgs: safeImgs });
+              });
+            });
+            return out;
+          }
+
+          const local = sanitizeAdsForLocal(rawLocal);
+          try{
+            localStorage.setItem('abc_ads', JSON.stringify(local));
+          }catch(err){
+            console.warn('写入 abc_ads 失败，尝试移除所有图片以回退：', err);
+            try{
+              const minimal = { banner: (local.banner||[]).map(x=>({ text: x.text||'', imgs: [] })), footer: (local.footer||[]).map(x=>({ text: x.text||'', imgs: [] })) };
+              localStorage.setItem('abc_ads', JSON.stringify(minimal));
+            }catch(err2){
+              console.error('写入 abc_ads 回退仍失败：', err2);
+            }
+          }
           // 触发渲染
           if(typeof renderAds === 'function') renderAds();
         }
