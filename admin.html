@@ -505,7 +505,10 @@
           const payload = {
             ad_type: 'banner',
             type: 'banner',
-            content: ad.text||''
+            content: ad.text||'',
+            imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
+            admin_id: 1,
+            created_at: new Date().toISOString()
           };
           try {
             const { error } = await supabaseClient.from('advertisements').insert(payload);
@@ -520,7 +523,10 @@
           const payload = {
             ad_type: 'footer',
             type: 'footer',
-            content: ad.text||''
+            content: ad.text||'',
+            imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
+            admin_id: 1,
+            created_at: new Date().toISOString()
           };
           try {
             const { error } = await supabaseClient.from('advertisements').insert(payload);

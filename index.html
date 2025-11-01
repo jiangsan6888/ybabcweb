@@ -553,9 +553,12 @@
           data.forEach(ad => {
             const typeVal = ad.ad_type || ad.type; // 兼容两种字段
             let imgs = ad.imgs;
-            if(typeof imgs === 'string') { try{ imgs = JSON.parse(imgs); }catch{} }
-            if(!Array.isArray(imgs)) imgs = [];
-            const obj = { text: ad.content || '', imgs };
+            // imgs 在数据库中可能为 JSON 字符串或数组，或 null
+            if (typeof imgs === 'string') {
+              try { imgs = JSON.parse(imgs); } catch (e) { imgs = imgs ? [imgs] : []; }
+            }
+            if (!Array.isArray(imgs)) imgs = imgs ? [imgs] : [];
+            const obj = { text: ad.content || '', imgs: imgs.filter(Boolean) };
             if(typeVal === 'banner') adData.banner.push(obj);
             if(typeVal === 'footer') adData.footer.push(obj);
           });
@@ -581,7 +584,11 @@
     function renderAdItem(ad, padding, idx, type) {
       let html = '';
       if(ad.imgs && ad.imgs.length) {
-        html += ad.imgs.map((img,i)=>`<img src='${img}' style='max-height:60px;max-width:120px;margin-right:8px;border-radius:8px;vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}' data-imgidx='${i}'>`).join('');
+        // 优先显示第一张图片作为缩略
+        html += `<img src='${ad.imgs[0]}' style='max-height:60px;max-width:120px;margin-right:8px;border-radius:8px;vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}' data-imgidx='0'>`;
+      } else {
+        // 占位图（纯文字广告时显示）
+        html += `<div style='width:120px;height:60px;display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px dashed #cce4ff;border-radius:8px;color:#2d8cf0;font-size:0.95em;margin-right:8px;'>广告位</div>`;
       }
       if(ad.text) {
         html += `<span style='vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}'>${ad.text}</span>`;
