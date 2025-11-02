@@ -1341,21 +1341,38 @@
       document.getElementById('chat-input').value = '';
       renderChatMsgs();
     }
-    // Realtime 订阅
+    // Realtime 订阅 + 轮询备用机制（双重保障，确保聊天快速响应）
     (function setupRealtime(){
       if (!supabaseClient) return;
       try {
         supabaseClient.channel('realtime:messages')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-            // 新消息到达时刷新（尽量轻量，仅在窗口打开时）
+            console.log('收到新消息 Realtime 推送');
+            // 新消息到达时立即刷新
+            const win = document.getElementById('chat-window');
+            if (win && win.style.display!== 'none') {
+              renderChatMsgs();
+            }
+          })
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
+            console.log('检测到消息删除 Realtime 推送');
             const win = document.getElementById('chat-window');
             if (win && win.style.display!== 'none') {
               renderChatMsgs();
             }
           })
           .subscribe();
+        console.log('已订阅聊天消息 Realtime 更新');
       } catch (e) { console.warn('订阅Realtime失败:', e); }
     })();
+    
+    // 添加快速轮询备用机制（每2秒检查一次，确保即使 Realtime 失败也能快速更新）
+    setInterval(() => {
+      const win = document.getElementById('chat-window');
+      if (win && win.style.display !== 'none' && getCurrentUser()) {
+        renderChatMsgs();
+      }
+    }, 2000);
     // 图片预览弹窗
     let imgPreviewDiv = null;
     function showImgPreview(src) {
