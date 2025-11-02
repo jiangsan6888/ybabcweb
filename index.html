@@ -626,9 +626,23 @@
         adFooterDiv.innerHTML = '';
       }
     }
-    // 首次广告渲染和定时刷新（每30秒自动刷新一次，确保实时同步）
+    // 首次广告渲染和定时刷新（每3秒自动刷新一次，确保实时同步删除的广告）
     (async()=>{await renderAds();})();
-    setInterval(async()=>{await renderAds();}, 30000);
+    setInterval(async()=>{await renderAds();}, 3000);
+    
+    // Realtime 订阅广告表变化（INSERT/DELETE/UPDATE）
+    (function setupAdRealtime(){
+      if (!supabaseClient) return;
+      try {
+        supabaseClient.channel('realtime:advertisements')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'advertisements' }, payload => {
+            console.log('广告表发生变化，立即刷新:', payload.eventType);
+            renderAds();
+          })
+          .subscribe();
+        console.log('已订阅广告表 Realtime 更新');
+      } catch (e) { console.warn('订阅广告 Realtime 失败:', e); }
+    })();
     // 修改renderAds，编辑广告后立即刷新轮播
     async function renderAds() {
       const adData = await getAdData();
@@ -1765,12 +1779,31 @@
       if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
       step();
     }
-    // 初始加载和定时刷新（每30秒自动刷新一次，确保实时同步）
+    // 初始加载和定时刷新（每3秒自动刷新一次，确保实时同步删除的通知）
     (async()=>{await renderNoticeMarquee();})();
-    setInterval(async()=>{await renderNoticeMarquee();}, 30000);
+    setInterval(async()=>{await renderNoticeMarquee();}, 3000);
     window.addEventListener('storage', async function(e){
       if(e.key==='abc_notices') await renderNoticeMarquee();
     });
+    
+    // Realtime 订阅通知表变化（INSERT/DELETE/UPDATE）
+    (function setupNoticeRealtime(){
+      if (!supabaseClient) return;
+      try {
+        supabaseClient.channel('realtime:notices')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, payload => {
+            console.log('通知表发生变化，立即刷新:', payload.eventType);
+            renderNoticeMarquee();
+            // 如果通知弹窗打开着，也刷新它
+            const modal = document.getElementById('notice-modal');
+            if (modal && modal.style.display === 'flex') {
+              renderNoticeListView();
+            }
+          })
+          .subscribe();
+        console.log('已订阅通知表 Realtime 更新');
+      } catch (e) { console.warn('订阅通知 Realtime 失败:', e); }
+    })();
     
     // 更多游戏功能
     function showMoreGamesModal() {
