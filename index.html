@@ -465,29 +465,6 @@
     } catch (error) {
       console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
     }
-
-    // 验证 Supabase 客户端是否有权限可用；如遇 401 或 权限错误则回退到本地模式
-    async function validateSupabaseClient() {
-      if (!supabaseClient) return false;
-      try {
-        const { data, error, status } = await supabaseClient.from('members').select('id').limit(1).maybeSingle();
-        if (error) {
-          console.warn('Supabase 验证失败:', error, 'status:', status);
-          if (status === 401 || (error && String(error).toLowerCase().includes('jwt'))) {
-            supabaseClient = null;
-            console.warn('Supabase 授权失败，回退到本地存储模式');
-            return false;
-          }
-        }
-        return true;
-      } catch (err) {
-        console.warn('Supabase 验证异常，回退本地:', err);
-        supabaseClient = null;
-        return false;
-      }
-    }
-
-    (async ()=>{ await validateSupabaseClient(); })();
     // 会员登录/注册逻辑
     const userBar = document.getElementById('user-bar');
     const loginBtn = document.getElementById('login-btn');
@@ -569,51 +546,32 @@
     }
     // 广告管理逻辑
     async function getAdData() {
-      // 优先使用本地数据（如果 admin 在本地已发布或断网），以保证本地上传的广告图片能即时显示
-      try {
-        const rawLocal = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
-        const hasLocal = (rawLocal && ((rawLocal.banner && rawLocal.banner.length>0) || (rawLocal.footer && rawLocal.footer.length>0)));
-        const normalizeArr = (arr)=> (arr||[]).map(item=>{
-          if(typeof item === 'string') { return { text: item, imgs: [] }; }
-          if(item && typeof item === 'object') {
-            return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
-          }
-          return { text: '', imgs: [] };
-        });
-        if (hasLocal) {
-          return { banner: normalizeArr(rawLocal.banner), footer: normalizeArr(rawLocal.footer) };
-        }
-      } catch(e) {
-        console.warn('解析本地 abc_ads 失败，继续尝试 Supabase:', e);
-      }
-
-      // 若本地无数据则尝试从 Supabase 读取（如可用）
       if(supabaseClient){
-        try {
-          const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
-          if(!error && data && data.length){
-            const adData = { banner: [], footer: [] };
-            data.forEach(ad => {
-              const typeVal = ad.ad_type || ad.type; // 兼容两种字段
-              let imgs = ad.imgs;
-              // imgs 在数据库中可能为 JSON 字符串或数组，或 null
-              if (typeof imgs === 'string') {
-                try { imgs = JSON.parse(imgs); } catch (e) { imgs = imgs ? [imgs] : []; }
-              }
-              if (!Array.isArray(imgs)) imgs = imgs ? [imgs] : [];
-              const obj = { text: ad.content || '', imgs: imgs.filter(Boolean) };
-              if(typeVal === 'banner') adData.banner.push(obj);
-              if(typeVal === 'footer') adData.footer.push(obj);
-            });
-            return adData;
-          }
-        } catch (err) {
-          console.warn('从 Supabase 获取广告失败，回退本地:', err);
+        const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
+        if(!error && data && data.length){
+          const adData = { banner: [], footer: [] };
+          data.forEach(ad => {
+            const typeVal = ad.ad_type || ad.type; // 兼容两种字段
+            let imgs = ad.imgs;
+            if(typeof imgs === 'string') { try{ imgs = JSON.parse(imgs); }catch{} }
+            if(!Array.isArray(imgs)) imgs = [];
+            const obj = { text: ad.content || '', imgs };
+            if(typeVal === 'banner') adData.banner.push(obj);
+            if(typeVal === 'footer') adData.footer.push(obj);
+          });
+          return adData;
         }
       }
-
-      // 最终回退：空数据
-      return { banner: [], footer: [] };
+      // 断网用本地
+      const raw = JSON.parse(localStorage.getItem('abc_ads')||'{"banner":[],"footer":[]}');
+      const normalizeArr = (arr)=> (arr||[]).map(item=>{
+        if(typeof item === 'string') { return { text: item, imgs: [] }; }
+        if(item && typeof item === 'object') {
+          return { text: (item.text||''), imgs: Array.isArray(item.imgs)? item.imgs : [] };
+        }
+        return { text: '', imgs: [] };
+      });
+      return { banner: normalizeArr(raw.banner), footer: normalizeArr(raw.footer) };
     }
 
     function setAdData(data) {
@@ -623,11 +581,7 @@
     function renderAdItem(ad, padding, idx, type) {
       let html = '';
       if(ad.imgs && ad.imgs.length) {
-        // 优先显示第一张图片作为缩略
-        html += `<img src='${ad.imgs[0]}' style='max-height:60px;max-width:120px;margin-right:8px;border-radius:8px;vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}' data-imgidx='0'>`;
-      } else {
-        // 占位图（纯文字广告时显示）
-        html += `<div style='width:120px;height:60px;display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px dashed #cce4ff;border-radius:8px;color:#2d8cf0;font-size:0.95em;margin-right:8px;'>广告位</div>`;
+        html += ad.imgs.map((img,i)=>`<img src='${img}' style='max-height:60px;max-width:120px;margin-right:8px;border-radius:8px;vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}' data-imgidx='${i}'>`).join('');
       }
       if(ad.text) {
         html += `<span style='vertical-align:middle;cursor:pointer;' data-adtype='${type}' data-adidx='${idx}'>${ad.text}</span>`;
@@ -672,8 +626,9 @@
         adFooterDiv.innerHTML = '';
       }
     }
-    // 首次广告渲染，异步
+    // 首次广告渲染和定时刷新（每30秒自动刷新一次，确保实时同步）
     (async()=>{await renderAds();})();
+    setInterval(async()=>{await renderAds();}, 30000);
     // 修改renderAds，编辑广告后立即刷新轮播
     async function renderAds() {
       const adData = await getAdData();
@@ -1751,98 +1706,33 @@
       
       alert('游戏上传成功！');
     }
-    // 通知弹窗逻辑
-    // 优先从 Supabase 读取（如果客户端可用且有权限），否则回退到 localStorage
-    // 辅助：规范化通知的 img 字段（支持数组、JSON 字符串或单个字符串）
-    function normalizeNoticeImg(img){
-      if(!img) return '';
-      // 已是数组
-      if(Array.isArray(img)) return img.length?img[0]:'';
-      // 字符串，可能是 JSON 数组或单字符串
-      if(typeof img === 'string'){
-        const s = img.trim();
-        if(!s) return '';
-        // 尝试解析 JSON 数组字符串
-        if((s.startsWith('[') && s.endsWith(']')) || s.startsWith('"[')){
-          try{ const parsed = JSON.parse(s); if(Array.isArray(parsed)) return parsed.length?parsed[0]:''; }catch(e){ /* ignore */ }
-        }
-        return s;
-      }
-      // 其他类型，返回空
-      return '';
-    }
-    async function fetchNotices() {
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('notices').select('content, img, time').order('created_at', { ascending: false });
-          if (!error && data) {
-            return (data||[]).map(n => ({ text: n.content || '', img: normalizeNoticeImg(n.img), time: n.time || '' }));
-          }
-        } catch (err) {
-          console.warn('从 Supabase 获取通知失败，回退本地：', err);
+    // 通知弹窗逻辑 - 从Supabase实时读取
+    async function getNotices() {
+      if(supabaseClient){
+        const { data, error } = await supabaseClient.from('notices').select('*').order('created_at', { ascending: false });
+        if(!error && data && data.length){
+          // 兼容数据库字段和本地字段
+          return data.map(d=>({
+            text: d.content||'',
+            img: d.img||'',
+            time: d.time || (d.created_at ? d.created_at.replace('T',' ').split('.')[0] : '')
+          }));
         }
       }
-      // 回退到本地
-      // 本地数据可能包含 img 字段或数组，统一处理
-      try{
-        const local = JSON.parse(localStorage.getItem('abc_notices')||'[]');
-        return (local||[]).map(n=>({ text: n.text||'', img: normalizeNoticeImg(n.img||n.imgs||''), time: n.time||'' }));
-      }catch(e){ return []; }
+      // 断网用本地
+      return JSON.parse(localStorage.getItem('abc_notices')||'[]');
     }
-
-    function renderNoticeListView() {
+    async function renderNoticeListView() {
+      const notices = await getNotices();
       const list = document.getElementById('notice-list-view');
-      fetchNotices().then(notices => {
-        if(!notices || !notices.length) {
-          list.innerHTML = '<div style="color:#888;text-align:center;padding:40px 0;">暂无通知</div>';
-          return;
-        }
-        // 渲染并为每条通知绑定点击事件（图片预览/详情）
-  list.innerHTML = notices.map((n,i)=>`<div class='notice-list-item' data-idx='${i}' style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;cursor:pointer;'>${n.img?`<img src='${n.img}' class='notice-thumb' data-idx='${i}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;' onerror="this.style.display='none';console.warn('通知图片加载失败: ', this.src)">`:''}<div style='flex:1;'><div class='notice-text' style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div class='notice-time' style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
-        // 绑定点击事件：点击图片或条目显示详情
-        Array.from(list.querySelectorAll('.notice-thumb')).forEach(img=>{
-          img.onclick = function(e){
-            e.stopPropagation();
-            const idx = +this.dataset.idx;
-            showNoticeDetail(notices[idx]);
-          };
-        });
-        Array.from(list.querySelectorAll('.notice-list-item')).forEach(item=>{
-          item.onclick = function(){
-            const idx = +this.dataset.idx;
-            showNoticeDetail(notices[idx]);
-          };
-        });
-      }).catch(err=>{
-        console.error('渲染通知列表失败：', err);
+      if(!notices.length) {
         list.innerHTML = '<div style="color:#888;text-align:center;padding:40px 0;">暂无通知</div>';
-      });
-    }
-    // 通知详情弹窗（图片预览或文本详情）
-    if(!document.getElementById('notice-detail-modal')){
-      const nmodal = document.createElement('div');
-      nmodal.id = 'notice-detail-modal';
-      nmodal.style = 'display:none;position:fixed;z-index:20002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);justify-content:center;align-items:center;';
-      nmodal.innerHTML = `<div id='notice-detail-content' style='background:#fff;border-radius:14px;box-shadow:0 4px 24px #0003;padding:24px;max-width:90vw;max-height:80vh;overflow:auto;position:relative;text-align:center;'></div>`+
-        `<button id='notice-detail-close' style='position:absolute;top:12px;right:18px;background:none;border:none;font-size:2em;color:#2d8cf0;cursor:pointer;z-index:10;'>×</button>`;
-      document.body.appendChild(nmodal);
-      document.getElementById('notice-detail-close').onclick = ()=>{ nmodal.style.display='none'; };
-      nmodal.onclick = function(e){ if(e.target===nmodal) nmodal.style.display='none'; };
-    }
-    function showNoticeDetail(notice){
-      const modal = document.getElementById('notice-detail-modal');
-      const content = document.getElementById('notice-detail-content');
-      let imgsHtml = '';
-      if(notice.img){
-        imgsHtml = `<img src='${notice.img}' style='max-width:90vw;max-height:60vh;border-radius:10px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,0.15);'>`;
+        return;
       }
-      const textHtml = notice.text?`<div style='font-size:1.1em;color:#2d8cf0;margin-top:8px;'>${notice.text}</div>`:'';
-      const timeHtml = notice.time?`<div style='font-size:0.9em;color:#888;margin-top:6px;'>${notice.time}</div>`:'';
-      content.innerHTML = imgsHtml + textHtml + timeHtml;
-      modal.style.display = 'flex';
+      list.innerHTML = notices.map(n=>`<div style='border-bottom:1px solid #e0eafc;padding:16px 0;display:flex;align-items:center;gap:18px;'>${n.img?`<img src='${n.img}' style='width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e0eafc;flex-shrink:0;margin-right:8px;'>`:''}<div style='flex:1;'><div style='font-size:1.1em;color:#2d8cf0;margin-bottom:6px;'>${n.text||''}</div><div style='font-size:0.9em;color:#888;'>${n.time||''}</div></div></div>`).join('');
     }
-    document.getElementById('notice-btn').onclick = function(){
-      renderNoticeListView();
+    document.getElementById('notice-btn').onclick = async function(){
+      await renderNoticeListView();
       document.getElementById('notice-modal').style.display = 'flex';
     };
     document.getElementById('notice-close').onclick = function(){
@@ -1851,143 +1741,36 @@
     document.getElementById('notice-modal').onclick = function(e){
       if(e.target===this) this.style.display='none';
     };
-    // 首页通知横向滚动条（从 Supabase 或本地读取）
-    function renderNoticeMarquee() {
+    // 首页通知横向滚动条 - 从Supabase实时读取
+    async function renderNoticeMarquee() {
+      const notices = await getNotices();
+      const texts = notices.map(n=>n.text).filter(Boolean);
       const marquee = document.getElementById('notice-marquee');
       if(!marquee) return;
-      fetchNotices().then(notices => {
-        const texts = (notices||[]).map(n=>n.text).filter(Boolean);
-        if(!texts.length) {
-          marquee.textContent = '暂无通知';
-          return;
-        }
-        marquee.textContent = texts.join('    |    ');
-        let pos = document.getElementById('notice-marquee-wrap').offsetWidth;
-        marquee.style.left = pos + 'px';
-        function step() {
-          pos -= 1;
-          marquee.style.left = pos + 'px';
-          if(pos + marquee.offsetWidth < 0) {
-            pos = document.getElementById('notice-marquee-wrap').offsetWidth;
-          }
-          marquee._marqueeTimer = requestAnimationFrame(step);
-        }
-        if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
-        step();
-      }).catch(err=>{
-        console.warn('获取通知失败，回退本地：', err);
+      if(!texts.length) {
         marquee.textContent = '暂无通知';
-      });
+        return;
+      }
+      marquee.textContent = texts.join('    |    ');
+      let pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+      marquee.style.left = pos + 'px';
+      function step() {
+        pos -= 1;
+        marquee.style.left = pos + 'px';
+        if(pos + marquee.offsetWidth < 0) {
+          pos = document.getElementById('notice-marquee-wrap').offsetWidth;
+        }
+        marquee._marqueeTimer = requestAnimationFrame(step);
+      }
+      if(marquee._marqueeTimer) cancelAnimationFrame(marquee._marqueeTimer);
+      step();
     }
-    renderNoticeMarquee();
-
-    // 定期从 Supabase 同步数据到 localStorage（使后台变更尽快反映到前端）
-    async function syncFromSupabase(){
-      if(!supabaseClient) return;
-      try{
-        // 同步广告
-        const { data: adsData, error: adsErr } = await supabaseClient.from('advertisements').select('ad_type,type,content,imgs,created_at').order('created_at', { ascending: false }).limit(50);
-        if(!adsErr && adsData){
-          // 归一化为本地结构
-          const rawLocal = { banner: [], footer: [] };
-          (adsData||[]).forEach(a=>{
-            const imgs = (typeof a.imgs==='string' ? (()=>{ try{ const p=JSON.parse(a.imgs); return Array.isArray(p)?p: [a.imgs]; }catch(e){ return [a.imgs]; } })() : (Array.isArray(a.imgs)?a.imgs: (a.imgs? [a.imgs] : [])));
-            const item = { text: a.content||'', imgs: imgs };
-            if((a.ad_type||a.type)=='footer') rawLocal.footer.push(item); else rawLocal.banner.push(item);
-          });
-
-          // 图片裁剪：避免将过大的 dataURI 写入 localStorage 导致配额溢出
-          function sanitizeAdsForLocal(src){
-            const MAX_IMG_SIZE = 100 * 1024; // 100KB
-            const out = { banner: [], footer: [] };
-            ['banner','footer'].forEach(section=>{
-              (src[section]||[]).forEach(it=>{
-                const safeImgs = (it.imgs||[]).map(img=>{
-                  try{
-                    if(!img) return '';
-                    if(typeof img==='string' && img.startsWith('data:') && img.length > MAX_IMG_SIZE){
-                      console.warn('移除过大图片以避免 localStorage 超限');
-                      return '';
-                    }
-                    return img;
-                  }catch(e){ return ''; }
-                });
-                out[section].push({ text: it.text||'', imgs: safeImgs });
-              });
-            });
-            return out;
-          }
-
-          const local = sanitizeAdsForLocal(rawLocal);
-          try{
-            localStorage.setItem('abc_ads', JSON.stringify(local));
-          }catch(err){
-            console.warn('写入 abc_ads 失败，尝试移除所有图片以回退：', err);
-            try{
-              const minimal = { banner: (local.banner||[]).map(x=>({ text: x.text||'', imgs: [] })), footer: (local.footer||[]).map(x=>({ text: x.text||'', imgs: [] })) };
-              localStorage.setItem('abc_ads', JSON.stringify(minimal));
-            }catch(err2){
-              console.error('写入 abc_ads 回退仍失败：', err2);
-            }
-          }
-          // 触发渲染
-          if(typeof renderAds === 'function') renderAds();
-        }
-
-        // 同步通知
-        const { data: noticeData, error: noticeErr } = await supabaseClient.from('notices').select('content,img,time,created_at').order('created_at', { ascending: false }).limit(50);
-        if(!noticeErr && noticeData){
-          const normalized = (noticeData||[]).map(n=>({ text: n.content||'', img: n.img||'', time: n.time||'', created_at: n.created_at }));
-          localStorage.setItem('abc_notices', JSON.stringify(normalized));
-          // 更新跑马和模态列表
-          if(typeof renderNoticeMarquee === 'function') renderNoticeMarquee();
-          if(document.getElementById('notice-modal') && document.getElementById('notice-modal').style.display==='flex' && typeof renderNoticeListView === 'function') renderNoticeListView();
-        }
-
-        // 同步聊天消息（如果表名不同请修改）
-        const { data: msgsData, error: msgsErr } = await supabaseClient.from('messages').select('user, text, img, time').order('created_at', { ascending: false }).limit(200);
-        if(!msgsErr && msgsData){
-          const msgs = (msgsData||[]).map(m=>({ user: m.user||'guest', text: m.text||'', img: m.img||'', time: m.time||'' })).reverse();
-          localStorage.setItem('abc_chat_msgs', JSON.stringify(msgs));
-          if(typeof renderChatMsgs === 'function') renderChatMsgs();
-        }
-      }catch(err){ console.warn('同步 Supabase 失败：', err); }
-    }
-
-    // 页面加载后如果 supabase 可用则立即同步一次并每30秒同步
-    (function(){ if(supabaseClient){ syncFromSupabase(); setInterval(syncFromSupabase, 30000); } })();
-
-    // 监听来自 admin 的更新通知，立即触发一次同步
-    window.addEventListener('storage', function(e){
-      if(e.key === 'abc_last_update'){
-        console.log('检测到后台更新标记，触发同步');
-        if(typeof syncFromSupabase === 'function') syncFromSupabase();
-      }
+    // 初始加载和定时刷新（每30秒自动刷新一次，确保实时同步）
+    (async()=>{await renderNoticeMarquee();})();
+    setInterval(async()=>{await renderNoticeMarquee();}, 30000);
+    window.addEventListener('storage', async function(e){
+      if(e.key==='abc_notices') await renderNoticeMarquee();
     });
-    window.addEventListener('storage', function(e){
-      if(e.key==='abc_notices') renderNoticeMarquee();
-      if(e.key==='abc_ads'){
-        if(typeof renderAds === 'function') renderAds();
-      }
-    });
-    // BroadcastChannel 跨标签页即时同步
-    try{
-      if(typeof BroadcastChannel !== 'undefined'){
-        const bc = new BroadcastChannel('ybabc_channel');
-        bc.onmessage = function(ev){
-          try{
-            const msg = ev.data || {};
-            if(msg.type === 'ads_update'){
-              if(typeof renderAds === 'function') renderAds();
-            }
-            if(msg.type === 'notices_update'){
-              if(typeof renderNoticeMarquee === 'function') renderNoticeMarquee();
-              if(document.getElementById('notice-modal') && document.getElementById('notice-modal').style.display==='flex' && typeof renderNoticeListView === 'function') renderNoticeListView();
-            }
-          }catch(e){ console.warn('BroadcastChannel 消息处理错误', e); }
-        };
-      }
-    }catch(e){ console.warn('不支持 BroadcastChannel', e); }
     
     // 更多游戏功能
     function showMoreGamesModal() {

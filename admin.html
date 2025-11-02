@@ -87,10 +87,7 @@
         <h2>通知管理</h2>
         <form id="notice-form">
           <div id="notice-list"></div>
-          <div style="display:flex;gap:10px;margin-top:8px;align-items:center;">
-            <button type="button" id="add-notice" class="btn">新增通知</button>
-            <button type="button" id="view-notice-pending" class="btn" style="background:#ff9800;">查看 pending 通知</button>
-          </div>
+          <button type="button" id="add-notice" class="btn" style="margin-top:8px;">新增通知</button>
           <div class="save-bar"><button type="submit" class="btn">保存通知</button></div>
         </form>
       </div>
@@ -114,43 +111,6 @@
       }
     } catch (error) {
       console.warn('Supabase初始化失败，系统将使用本地存储模式:', error);
-    }
-
-    // 验证 Supabase 客户端是否有权限可用（避免 anon key 被拒导致页面继续使用但请求 401）
-    async function validateSupabaseClient() {
-      if (!supabaseClient) return false;
-      try {
-        // 做一个小查询以检测权限（members 表通常存在）。如果返回错误或 401，则回退本地模式
-        const { data, error, status } = await supabaseClient.from('members').select('id').limit(1).maybeSingle();
-        if (error) {
-          console.warn('Supabase 验证失败:', error, 'status:', status);
-          // 如果是授权错误或其他不可恢复错误，禁用 supabaseClient
-          if (status === 401 || (error && String(error).toLowerCase().includes('jwt')) ) {
-            supabaseClient = null;
-            console.warn('Supabase 授权失败，回退到本地存储模式');
-            return false;
-          }
-        }
-        return true;
-      } catch (err) {
-        console.warn('Supabase 验证异常，回退本地:', err);
-        supabaseClient = null;
-        return false;
-      }
-    }
-
-    // 立即验证（不阻塞页面渲染）
-    (async ()=>{ await validateSupabaseClient(); })();
-    // 生成 UUID (v4 简易实现) 用作本地与远端匹配的 client_uuid
-    function generateUUID(){
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
-        const r = Math.random()*16|0; const v = c==='x'? r : (r&0x3|0x8); return v.toString(16);
-      });
-    }
-
-    // 在 admin 成功修改数据库后写入标记，触发前端页面的 storage 监听以同步更新
-    function notifyFrontendUpdate(){
-      try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){ console.warn('写入 abc_last_update 失败', e); }
     }
     
     // 管理员权限验证
@@ -190,11 +150,12 @@
       const isOnline = updateAdminNetworkStatus();
       
       if (isOnline) {
-        // 使用 validateSupabaseClient 来检测 Supabase 可用性（避免无效 HEAD 导致 401 噪音）
-        validateSupabaseClient().then(ok=>{
-          if(!ok) console.warn('Supabase 验证失败或无权限，系统将回退到本地存储模式');
-        }).catch(()=>{
-          console.warn('Supabase 验证异常，系统将回退到本地存储模式');
+        // 检测Supabase连接
+        fetch('https://rfbjjgzmdtmvjxfbmvpm.supabase.co/rest/v1/', {
+          method: 'HEAD',
+          mode: 'no-cors'
+        }).catch(() => {
+          console.warn('Supabase连接检测失败，但系统仍可正常使用（使用本地存储）');
         });
       }
       
@@ -427,21 +388,17 @@
     }
     
     function setAdData(data) {
-  localStorage.setItem('abc_ads', JSON.stringify(data));
-  try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
-  try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
-  try{ if(typeof BroadcastChannel !== 'undefined'){ const bc = new BroadcastChannel('ybabc_channel'); bc.postMessage({type:'ads_update', ts: Date.now()}); bc.close(); } }catch(e){}
+      localStorage.setItem('abc_ads', JSON.stringify(data));
     }
     function createAdItem(ad, type, idx) {
       // type: 'banner' or 'footer'
-  const dbAttr = ad && ad.db_id ? `data-db-id='${ad.db_id}'` : '';
-  return `<div class="ad-item" ${dbAttr} style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+      return `<div class="ad-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
         <textarea placeholder="广告文字" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${ad.text||''}</textarea>
         <div class="ad-imgs" style="display:flex;gap:8px;margin:8px 0 0 0;flex-wrap:wrap;">
           ${(ad.imgs||[]).map((img,i)=>`<div style='position:relative;display:inline-block;'><img src='${img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-type='${type}' data-adidx='${idx}' data-imgidx='${i}' class='del-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`).join('')}
           ${(ad.imgs||[]).length<3?`<label style='width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;border:1px dashed #2d8cf0;border-radius:6px;cursor:pointer;background:#f7faff;'><span style='font-size:2em;color:#2d8cf0;'>+</span><input type='file' accept='image/*' style='display:none;'></label>`:''}
         </div>
-  <button type="button" class="btn del-ad-btn" data-type="${type}" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
+        <button type="button" class="btn del-ad-btn" data-type="${type}" data-idx="${idx}" style="position:absolute;top:8px;right:8px;background:#f44336;">删除</button>
       </div>`;
     }
     async function renderAdForm() {
@@ -472,27 +429,6 @@
       if(target.classList.contains('del-ad-btn')) {
         const type = target.dataset.type, idx = +target.dataset.idx;
         const adData = getAdData();
-        // 如果该广告有 db_id，尝试删除数据库记录
-        const parent = target.closest('.ad-item');
-        const dbId = parent ? parent.getAttribute('data-db-id') : null;
-        if(dbId && supabaseClient){
-          (async ()=>{
-            try{
-              const { error } = await supabaseClient.from('advertisements').delete().eq('id', dbId);
-              if(error){
-                // 写入 pending delete
-                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);} 
-                console.warn('数据库删除广告失败，已加入 pending', error);
-              } else {
-                // 删除成功，通知前端刷新
-                notifyFrontendUpdate();
-              }
-            }catch(err){
-              try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'delete', table:'advertisements', id: dbId, created_at: new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 删除失败', e);} 
-              console.error('删除广告异常，已加入 pending', err);
-            }
-          })();
-        }
         adData[type].splice(idx,1);
         setAdData(adData);
         renderAdForm();
@@ -509,7 +445,7 @@
         const type = parent.parentElement.id==='ad-banner-list'?'banner':'footer';
         const idx = Array.from(parent.parentElement.children).indexOf(parent);
         const file = input.files[0];
-  if(!file.type.match(/^image\//)) { alert('仅支持图片文件（jpg/png/gif/webp 等）'); return; }
+        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
         if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
         const reader = new FileReader();
         reader.onload = function(ev){
@@ -539,13 +475,13 @@
     // 新增广告
     document.getElementById('add-banner-ad').onclick = function() {
       const adData = getAdData();
-  adData.banner.push({text:'',imgs:[], created_at: new Date().toISOString(), client_uuid: generateUUID()});
+      adData.banner.push({text:'',imgs:[]});
       setAdData(adData);
       renderAdForm();
     };
     document.getElementById('add-footer-ad').onclick = function() {
       const adData = getAdData();
-  adData.footer.push({text:'',imgs:[], created_at: new Date().toISOString(), client_uuid: generateUUID()});
+      adData.footer.push({text:'',imgs:[]});
       setAdData(adData);
       renderAdForm();
     };
@@ -561,15 +497,18 @@
       const newData = { banner: clean(data.banner), footer: clean(data.footer) };
       setAdData(newData);
 
-      // 如果启用了仅本地同步，跳过远端写入并通知前端刷新
-      if (localStorage.getItem('abc_local_only') === '1') {
-        try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
-        alert('广告已保存（仅本地模式）。已通知前端刷新。');
-        return;
-      }
-
-      // ------- 写入Supabase广告表，失败时输出详细错误 -------
+      // ------- 写入Supabase广告表，先删除旧记录，再插入新记录，确保删除的内容前端也不会显示 -------
       if (supabaseClient) {
+        // 先删除数据库中的所有旧广告（确保删除的内容前端也不会显示）
+        const { error: delError, count } = await supabaseClient.from('advertisements').delete().neq('id', 0);
+        if (delError) {
+          console.error('删除旧广告失败:', delError);
+          alert('警告：删除旧广告失败（可能是权限问题）。\n错误: ' + delError.message + '\n\n请检查数据库DELETE权限配置。\n广告仍会保存，但旧广告可能不会自动删除。');
+        } else {
+          console.log(`成功删除 ${count || 0} 条旧广告`);
+        }
+        
+        // 再插入新的广告
         let succ = 0, fail = 0, failMsg = '';
         // 顶部广告
         for(const ad of newData.banner){
@@ -577,38 +516,16 @@
             ad_type: 'banner',
             type: 'banner',
             content: ad.text||'',
-            imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
-            client_uuid: ad.client_uuid || null,
+            imgs: (ad.imgs && ad.imgs.length > 0) ? JSON.stringify(ad.imgs) : null,
             admin_id: 1,
             created_at: new Date().toISOString()
           };
           try {
-            if(ad.db_id){
-              // update existing
-              const { error } = await supabaseClient.from('advertisements').update(payload).eq('id', ad.db_id);
-              if(error){ fail++; failMsg = error.message||String(error); console.error('广告更新失败(banner):', { payload, error });
-                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
-              else succ++;
-            } else {
-              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id, client_uuid').maybeSingle();
-              if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error });
-                try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, client_uuid: payload.client_uuid||null, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
-              else { succ++; if(inserted && inserted.id){ /* 写回 localStorage，使用 created_at 匹配注入 db_id */
-                  const current = getAdData();
-                  const arr = current.banner || [];
-                  // 优先使用 client_uuid 来精确匹配
-                  for(let i=0;i<arr.length;i++){
-                    if(!arr[i].db_id && payload.client_uuid && arr[i].client_uuid && arr[i].client_uuid === payload.client_uuid){ arr[i].db_id = inserted.id; break; }
-                  }
-                  // 回退到 created_at 匹配
-                  for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } }
-                  setAdData(current);
-                }
-              }
-            }
+            const { error } = await supabaseClient.from('advertisements').insert(payload);
+            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(banner):', { payload, error }); }
+            else succ++;
           } catch (err) {
             fail++; failMsg = String(err); console.error('广告写入异常(banner):', { payload, err });
-            try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op: ad.db_id? 'update':'insert', table:'advertisements', id: ad.db_id||null, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} 
           }
         }
         // 底部广告
@@ -617,34 +534,20 @@
             ad_type: 'footer',
             type: 'footer',
             content: ad.text||'',
-            imgs: Array.isArray(ad.imgs) ? JSON.stringify(ad.imgs) : JSON.stringify([]),
-            client_uuid: ad.client_uuid || null,
+            imgs: (ad.imgs && ad.imgs.length > 0) ? JSON.stringify(ad.imgs) : null,
             admin_id: 1,
             created_at: new Date().toISOString()
           };
           try {
-            if(ad.db_id){
-              const { error } = await supabaseClient.from('advertisements').update(payload).eq('id', ad.db_id);
-              if(error){ fail++; failMsg = error.message||String(error); console.error('广告更新失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'update', table:'advertisements', id:ad.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
-              else succ++;
-            } else {
-              const { data:inserted, error } = await supabaseClient.from('advertisements').insert(payload).select('id, client_uuid').maybeSingle();
-              if(error){ fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); try{ const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); pending.push({ op:'insert', table:'advertisements', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_ads_pending', JSON.stringify(pending)); }catch(e){console.error('写入 ads pending 失败', e);} }
-              else { succ++; if(inserted && inserted.id){ const current = getAdData(); const arr = current.footer || []; for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && payload.client_uuid && arr[i].client_uuid && arr[i].client_uuid === payload.client_uuid){ arr[i].db_id = inserted.id; break; } } for(let i=0;i<arr.length;i++){ if(!arr[i].db_id && arr[i].created_at && arr[i].created_at === payload.created_at){ arr[i].db_id = inserted.id; break; } } setAdData(current); } }
-            }
+            const { error } = await supabaseClient.from('advertisements').insert(payload);
+            if (error) { fail++; failMsg = error.message||String(error); console.error('广告写入失败(footer):', { payload, error }); }
+            else succ++;
           } catch (err) {
-            // 遇到异常（如 401/网络等）时，将 payload 暂存到本地 pending 队列，便于后续重试与审核
             fail++; failMsg = String(err); console.error('广告写入异常(footer):', { payload, err });
-            try {
-              const pending = JSON.parse(localStorage.getItem('abc_ads_pending')||'[]');
-              pending.push({ op: ad.db_id? 'update':'insert', table:'advertisements', id: ad.db_id||null, payload, created_at:new Date().toISOString() });
-              localStorage.setItem('abc_ads_pending', JSON.stringify(pending));
-              console.warn('已将失败的广告写入 pending 队列（abc_ads_pending）');
-            } catch(e) { console.error('写入 pending 队列失败', e); }
           }
         }
         if (succ>0) {
-          alert(`有 ${succ} 条广告已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
+          alert(`有 ${succ} 条广告已发布到数据库。已删除的旧广告已同步删除，会员端也会更新！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
         } else {
           alert('未能成功存储到数据库（广告）。\n错误信息: ' + (failMsg||'未知错误') + '\n\n请检查: 表字段是否为(type, content, imgs, admin_id, created_at)，RLS策略是否允许 anon INSERT');
         }
@@ -733,14 +636,10 @@
     }
     
     function setNotices(data) {
-  localStorage.setItem('abc_notices', JSON.stringify(data));
-  try{ if(localStorage.getItem('abc_local_only') === null) localStorage.setItem('abc_local_only','1'); }catch(e){}
-  try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
-  try{ if(typeof BroadcastChannel !== 'undefined'){ const bc = new BroadcastChannel('ybabc_channel'); bc.postMessage({type:'notices_update', ts: Date.now()}); bc.close(); } }catch(e){}
+      localStorage.setItem('abc_notices', JSON.stringify(data));
     }
     function createNoticeItem(notice, idx) {
-  const dbAttr = notice && notice.db_id ? `data-db-id='${notice.db_id}'` : '';
-  return `<div class="notice-item" ${dbAttr} style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
+      return `<div class="notice-item" style="border:1px solid #e0eafc;padding:10px 8px;margin-bottom:10px;border-radius:8px;position:relative;">
         <textarea placeholder="通知内容" style="width:100%;min-height:40px;border-radius:6px;border:1px solid #ccc;padding:6px 8px;font-size:1em;resize:vertical;">${notice.text||''}</textarea>
         <div style="margin:8px 0 0 0;display:flex;align-items:center;gap:8px;">
           ${notice.img?`<div style='position:relative;display:inline-block;'><img src='${notice.img}' style='width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ccc;'><span data-idx='${idx}' class='del-notice-img-btn' style='position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;cursor:pointer;'>×</span></div>`:''}
@@ -770,22 +669,6 @@
       // 删除通知
       if(target.classList.contains('del-notice-btn')) {
         const idx = +target.dataset.idx;
-        const parent = target.closest('.notice-item');
-        const dbId = parent ? parent.getAttribute('data-db-id') : null;
-        if(dbId && supabaseClient){
-          (async ()=>{
-            try{
-              const { error } = await supabaseClient.from('notices').delete().eq('id', dbId);
-              if(error){
-                try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} 
-                console.warn('数据库删除通知失败，已加入 pending', error);
-              } else {
-                // 删除成功，通知前端刷新
-                notifyFrontendUpdate();
-              }
-            }catch(err){ try{ const pend = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pend.push({ op:'delete', table:'notices', id:dbId, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pend)); }catch(e){console.error('写入 notices pending 删除失败', e);} console.error('删除通知异常，已加入 pending', err); }
-          })();
-        }
         const notices = getNotices();
         notices.splice(idx,1);
         setNotices(notices);
@@ -801,7 +684,7 @@
         const items = Array.from(parent.parentElement.querySelectorAll('.notice-item'));
         const idx = items.indexOf(parent);
         const file = input.files[0];
-  if(!file.type.match(/^image\//)) { alert('仅支持图片文件（jpg/png/gif/webp 等）'); return; }
+        if(!file.type.match(/^image\/(jpeg|png|gif)$/)) { alert('仅支持jpg/png/gif图片'); return; }
         if(file.size > 2*1024*1024) { alert('图片不能超过2MB'); return; }
         const reader = new FileReader();
         reader.onload = function(ev){
@@ -829,360 +712,48 @@
       const notices = getNotices();
       const now = new Date();
       const time = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+now.getHours()+":"+String(now.getMinutes()).padStart(2,'0');
-  notices.unshift({text:'',img:'',time, created_at: new Date().toISOString(), client_uuid: generateUUID()});
+      notices.unshift({text:'',img:'',time});
       setNotices(notices);
       renderNoticeForm();
     };
-    // 保存通知（支持 update/insert 到 Supabase，并在失败时写入 pending）
+    // 保存通知（新增Supabase远程写入）- 先删除旧记录，再插入新记录，确保前后端一致
     document.getElementById('notice-form').onsubmit = async function(e){
       e.preventDefault();
       const notices = getNotices();
-      // 先本地保存（local-first），保证管理员立即看到
-      setNotices(notices);
-
-      // 如果启用了仅本地同步，跳过远端写入并通知前端刷新
-      if (localStorage.getItem('abc_local_only') === '1') {
-        try{ localStorage.setItem('abc_last_update', new Date().toISOString()); }catch(e){}
-        alert('通知已保存（仅本地模式）。已通知前端刷新。');
-        return;
-      }
-
+      
       if (supabaseClient) {
+        // 先删除数据库中的所有旧通知（确保删除的内容前端也不会显示）
+        const { error: delError, count } = await supabaseClient.from('notices').delete().neq('id', 0);
+        if (delError) {
+          console.error('删除旧通知失败:', delError);
+          alert('警告：删除旧通知失败（可能是权限问题）。\n错误: ' + delError.message + '\n\n请检查数据库DELETE权限配置。\n通知仍会保存，但旧通知可能不会自动删除。');
+        } else {
+          console.log(`成功删除 ${count || 0} 条旧通知`);
+        }
+        
+        // 再插入新的通知
         let succ = 0, fail = 0, failMsg = '';
         for (const n of notices) {
           if (!n.text || !n.text.trim()) continue;
-          const payload = {
+          const { error } = await supabaseClient.from('notices').insert({
             content: n.text,
             img: n.img || null,
             time: n.time || null,
-            client_uuid: n.client_uuid || null,
             admin_id: 1,
             created_at: new Date().toISOString()
-          };
-          try {
-            if(n.db_id){
-              // update existing notice
-              const { error } = await supabaseClient.from('notices').update(payload).eq('id', n.db_id);
-              if(error){
-                fail++; failMsg = error.message || String(error);
-                console.error('通知更新失败:', { payload, error });
-                try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'update', table:'notices', id:n.db_id, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
-              } else {
-                succ++;
-                // 成功更新，通知前端刷新
-                notifyFrontendUpdate();
-              }
-            } else {
-              const { data: inserted, error } = await supabaseClient.from('notices').insert(payload).select('id, client_uuid').maybeSingle();
-              if(error){
-                fail++; failMsg = error.message || String(error);
-                console.error('通知写入失败:', { payload, error });
-                try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op:'insert', table:'notices', payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入 notices pending 失败', e); }
-              } else {
-                succ++;
-                // 插入成功，通知前端刷新
-                notifyFrontendUpdate();
-                if(inserted && inserted.id){
-                  // 写回 localStorage: 尝试在本地匹配刚插入的通知并记录 db_id
-                  try{
-                    const current = getNotices();
-                    // 优先使用 client_uuid 精确匹配
-                    for(let i=0;i<current.length;i++){
-                      if(!current[i].db_id && n.client_uuid && current[i].client_uuid && current[i].client_uuid === n.client_uuid){ current[i].db_id = inserted.id; break; }
-                    }
-                    // 回退到文本+图片匹配
-                    for(let i=0;i<current.length;i++){
-                      if(!current[i].db_id && current[i].text===n.text && (current[i].img||'')===(n.img||'')){
-                        current[i].db_id = inserted.id; break;
-                      }
-                    }
-                    setNotices(current);
-                  }catch(e){ console.warn('写回 db_id 到 localStorage 失败', e); }
-                }
-              }
-            }
-          } catch (err) {
-            fail++; failMsg = String(err); console.error('通知写入异常:', { payload, err });
-            try{ const pending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]'); pending.push({ op: n.db_id? 'update':'insert', table:'notices', id: n.db_id||null, payload, created_at:new Date().toISOString() }); localStorage.setItem('abc_notices_pending', JSON.stringify(pending)); }catch(e){ console.error('写入通知 pending 失败', e); }
-          }
+          });
+          if (error) { fail++; failMsg = error.message; } else succ++;
         }
-        if (succ>0) alert(`有 ${succ} 条通知已发布到数据库。会员可见！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
-        else alert('未能成功存储到数据库（通知）。请检查网络/权限/表结构，数据已本地保存。');
+        if (succ>0) alert(`有 ${succ} 条通知已发布到数据库。已删除的旧通知已同步删除，会员端也会更新！` + (fail>0?`\n失败${fail}条: ${failMsg}`:''));
+        else alert('未能成功存储到数据库（通知），请检查网络/权限/表结构。');
         return;
       }
-      // 离线回退：仅本地保存（已保存）
-      alert('通知已保存到本地（离线模式）。联网后将尝试同步数据库，失败会写入 pending 队列。');
+      // 离线回退：仅本地保存
+      setNotices(notices);
+      alert('通知已保存到本地（离线模式）。联网后请再次发布以同步数据库。');
     };
     const noticeMenuLi = document.querySelector('li[data-section="notice"]');
     noticeMenuLi.addEventListener('click', renderNoticeForm);
-
-    // Pending 通知管理：UI modal + 操作（查看/重试/删除）
-    // 创建 modal（如果尚未存在）
-    if(!document.getElementById('notice-pending-modal')){
-      const pmodal = document.createElement('div');
-      pmodal.id = 'notice-pending-modal';
-      pmodal.style = 'display:none;position:fixed;z-index:20010;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);justify-content:center;align-items:center;';
-      pmodal.innerHTML = `
-        <div style='background:#fff;border-radius:12px;padding:18px;max-width:820px;width:90%;max-height:80vh;overflow:auto;position:relative;'>
-          <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;'>
-            <h3 style='margin:0;color:#2d8cf0;'>Pending 通知队列</h3>
-            <div style='display:flex;gap:8px;align-items:center;'>
-              <button id='retry-all-notices' class='btn' style='background:#4caf50;'>全部重试</button>
-              <button id='clear-all-notices' class='btn' style='background:#f44336;'>清空所有</button>
-              <button id='close-pending-modal' class='btn' style='background:#ccc;color:#222;'>关闭</button>
-            </div>
-          </div>
-          <div id='notice-pending-list' style='display:flex;flex-direction:column;gap:8px;'></div>
-        </div>`;
-      document.body.appendChild(pmodal);
-      document.getElementById('close-pending-modal').onclick = ()=>{ pmodal.style.display='none'; };
-      pmodal.onclick = function(e){ if(e.target===pmodal) pmodal.style.display='none'; };
-    }
-
-    document.getElementById('view-notice-pending').onclick = function(){
-      renderPendingNotices();
-      document.getElementById('notice-pending-modal').style.display = 'flex';
-    };
-
-    function getNoticePending() {
-      return JSON.parse(localStorage.getItem('abc_notices_pending')||'[]');
-    }
-    function setNoticePending(list) {
-      localStorage.setItem('abc_notices_pending', JSON.stringify(list));
-    }
-
-    function renderPendingNotices(){
-      const listEl = document.getElementById('notice-pending-list');
-      const items = getNoticePending();
-      if(!items || !items.length){ listEl.innerHTML = "<div style='color:#888;text-align:center;padding:20px 0;'>暂无 pending 通知</div>"; return; }
-      listEl.innerHTML = items.map((p,idx)=>{
-        return `<div style='border:1px solid #e0eafc;padding:12px;border-radius:8px;display:flex;gap:12px;align-items:flex-start;'>
-          <div style='flex:1;text-align:left;'>
-            <div style='font-weight:bold;color:#2d8cf0;margin-bottom:6px;'>${p.content||''}</div>
-            <div style='color:#666;font-size:0.92em;margin-bottom:6px;'>${p.time||''} <span style='color:#999;margin-left:8px;font-size:0.85em;'>创建: ${p.created_at||''}</span></div>
-            ${p.img?`<img src='${p.img}' style='max-width:180px;max-height:110px;border-radius:8px;margin-top:6px;'>`:''}
-          </div>
-          <div style='display:flex;flex-direction:column;gap:8px;align-items:flex-end;'>
-            <button class='btn retry-notice-btn' data-idx='${idx}' style='background:#4caf50;'>重试</button>
-            <button class='btn del-pending-notice-btn' data-idx='${idx}' style='background:#f44336;'>删除</button>
-          </div>
-        </div>`;
-      }).join('');
-
-      // 绑定按钮事件
-      Array.from(document.querySelectorAll('.retry-notice-btn')).forEach(btn=>{
-        btn.onclick = async function(){
-          const idx = +this.dataset.idx;
-          await retryPendingNotice(idx);
-          renderPendingNotices();
-        };
-      });
-      Array.from(document.querySelectorAll('.del-pending-notice-btn')).forEach(btn=>{
-        btn.onclick = function(){
-          const idx = +this.dataset.idx;
-          const items = getNoticePending(); items.splice(idx,1); setNoticePending(items); renderPendingNotices();
-        };
-      });
-    }
-
-    async function retryPendingNotice(idx){
-      const items = getNoticePending();
-      if(!items || !items[idx]) return;
-      const payload = items[idx];
-      if(!supabaseClient){ alert('当前未连接到 Supabase，无法重试，请检查网络或稍后再试'); return; }
-      try {
-        const { error } = await supabaseClient.from('notices').insert(payload);
-        if(error){ alert('重试失败: '+(error.message||String(error))); console.error('重试失败', error); return; }
-        // 成功则从 pending 中移除
-        items.splice(idx,1); setNoticePending(items);
-  // 重试成功，通知前端更新
-  notifyFrontendUpdate();
-        alert('重试成功，通知已发布至数据库');
-      } catch(err){ console.error('重试异常', err); alert('重试异常：' + String(err)); }
-    }
-
-    document.getElementById('retry-all-notices').onclick = async function(){
-      const items = getNoticePending();
-      if(!items || !items.length) { alert('暂无 pending 条目'); return; }
-      if(!supabaseClient){ alert('未连接 Supabase，无法重试'); return; }
-      let succ = 0, fail = 0;
-      for(let i=items.length-1;i>=0;i--){ // 反向遍历以便安全删除
-        try{
-          const { error } = await supabaseClient.from('notices').insert(items[i]);
-          if(error) { fail++; console.error('重试条目失败', error); }
-          else { succ++; items.splice(i,1); }
-        }catch(err){ fail++; console.error('重试条目异常', err); }
-      }
-      setNoticePending(items);
-      renderPendingNotices();
-      alert(`全部重试完成：成功 ${succ}，失败 ${fail}`);
-    };
-
-    document.getElementById('clear-all-notices').onclick = function(){
-      if(confirm('确定要清空所有 pending 通知吗？此操作不可撤销')){
-        setNoticePending([]); renderPendingNotices(); alert('已清空 pending 列表');
-      }
-    };
-
-    // ---------- Pending 自动重试（广告与通知） ----------
-    function getAdsPending(){ return JSON.parse(localStorage.getItem('abc_ads_pending')||'[]'); }
-    function setAdsPending(list){ localStorage.setItem('abc_ads_pending', JSON.stringify(list)); }
-
-    let _processingPending = false;
-    async function processPendingQueues(){
-      if(_processingPending) return;
-      _processingPending = true;
-      try{
-        if(!supabaseClient){ return; }
-        // 处理广告 pending
-        let adsPending = getAdsPending();
-        let adsChanged = false;
-        for(let i=adsPending.length-1;i>=0;i--){
-          const item = adsPending[i];
-          try{
-            if(item.op === 'delete' && item.table === 'advertisements' && item.id){
-              const { error } = await supabaseClient.from('advertisements').delete().eq('id', item.id);
-              if(!error){ adsPending.splice(i,1); adsChanged = true; }
-            } else if(item.op === 'insert' && item.table === 'advertisements' && item.payload){
-              const { data, error } = await supabaseClient.from('advertisements').insert(item.payload).select('id, client_uuid').maybeSingle();
-              if(!error && data && data.id){
-                // 写回 localStorage 的 db_id
-                try{ const current = getAdData(); ['banner','footer'].forEach(section=>{ (current[section]||[]).forEach(a=>{ if(!a.db_id && item.client_uuid && a.client_uuid && a.client_uuid===item.client_uuid){ a.db_id = data.id; } }); }); setAdData(current); }catch(e){console.warn('写回 ads db_id 失败', e);}                
-                adsPending.splice(i,1);
-                adsChanged = true;
-              }
-            } else if(item.op === 'update' && item.table === 'advertisements' && item.id && item.payload){
-              const { error } = await supabaseClient.from('advertisements').update(item.payload).eq('id', item.id);
-              if(!error){ adsPending.splice(i,1); adsChanged = true; }
-            }
-          }catch(err){ console.warn('处理 ads pending 条目失败，稍后重试', err); }
-        }
-        setAdsPending(adsPending);
-
-        // 处理通知 pending
-        let noticesPending = JSON.parse(localStorage.getItem('abc_notices_pending')||'[]');
-        let noticesChanged = false;
-        for(let i=noticesPending.length-1;i>=0;i--){
-          const it = noticesPending[i];
-          try{
-            if(it.op === 'delete' && it.table === 'notices' && it.id){
-              const { error } = await supabaseClient.from('notices').delete().eq('id', it.id);
-              if(!error){ noticesPending.splice(i,1); noticesChanged = true; }
-            } else if(it.op === 'insert' && it.table === 'notices' && it.payload){
-              const { data, error } = await supabaseClient.from('notices').insert(it.payload).select('id, client_uuid').maybeSingle();
-              if(!error && data && data.id){
-                try{ const current = getNotices(); for(let j=0;j<current.length;j++){ if(!current[j].db_id && it.client_uuid && current[j].client_uuid && current[j].client_uuid===it.client_uuid){ current[j].db_id = data.id; break; } } setNotices(current); }catch(e){console.warn('写回 notices db_id 失败', e);}                
-                noticesPending.splice(i,1);
-                noticesChanged = true;
-              }
-            } else if(it.op === 'update' && it.table === 'notices' && it.id && it.payload){
-              const { error } = await supabaseClient.from('notices').update(it.payload).eq('id', it.id);
-              if(!error){ noticesPending.splice(i,1); noticesChanged = true; }
-            }
-          }catch(err){ console.warn('处理 notices pending 条目失败，稍后重试', err); }
-        }
-        setNoticePending(noticesPending);
-
-        // 如果有任何改动，通知前端刷新
-        if(adsChanged || noticesChanged){ notifyFrontendUpdate(); }
-      }finally{ _processingPending = false; }
-    }
-
-    // 页面加载时尝试处理一次 pending，并每5分钟重试
-    (function(){ processPendingQueues(); setInterval(processPendingQueues, 5*60*1000); })();
-
-    // ---------- 广告 pending 管理界面 ----------
-    // modal HTML（插入到页面末尾或合适位置）
-    const adsPendingModalHtml = `
-    <div id="ads-pending-modal" style="display:none;position:fixed;z-index:99999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
-      <div style="background:#fff;border-radius:12px;padding:18px;max-width:800px;width:92%;max-height:80vh;overflow:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h3 style="margin:0;color:#2d8cf0;">广告 Pending 列表</h3>
-          <div>
-            <button id="ads-retry-all" style="margin-right:8px;">重试全部</button>
-            <button id="ads-clear-all">清空</button>
-            <button id="ads-pending-close" style="margin-left:12px;">关闭</button>
-          </div>
-        </div>
-        <div id="ads-pending-list" style="display:grid;gap:8px;"></div>
-      </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', adsPendingModalHtml);
-
-    document.getElementById('ads-pending-close').onclick = function(){ document.getElementById('ads-pending-modal').style.display='none'; };
-    document.getElementById('ads-retry-all').onclick = function(){ retryAllPendingAds(); };
-    document.getElementById('ads-clear-all').onclick = function(){ if(confirm('确定要清空所有广告 pending 吗？此操作不可撤销')){ setAdsPending([]); renderPendingAds(); alert('已清空广告 pending 列表'); } };
-
-    function renderPendingAds(){
-      const list = getAdsPending();
-      const container = document.getElementById('ads-pending-list');
-      container.innerHTML = '';
-      if(!list.length){ container.innerHTML = '<div style="color:#666;text-align:center;padding:12px;">暂无 pending 条目</div>'; return; }
-      list.forEach((it, idx)=>{
-        const div = document.createElement('div');
-        div.style.border='1px dashed #ddd'; div.style.padding='10px'; div.style.borderRadius='6px';
-        const meta = document.createElement('div'); meta.style.marginBottom='8px'; meta.style.fontSize='0.9em'; meta.style.color='#333';
-        meta.textContent = `${it.op.toUpperCase()} ${it.table} ${it.id?('id='+it.id):''} ${it.client_uuid?('uuid='+it.client_uuid):''}`;
-        const body = document.createElement('div'); body.style.marginBottom='8px'; body.style.whiteSpace='pre-wrap'; body.textContent = JSON.stringify(it.payload||{}, null, 2);
-        const actions = document.createElement('div');
-        const retry = document.createElement('button'); retry.textContent='重试'; retry.onclick = ()=>retryPendingAd(idx);
-        const del = document.createElement('button'); del.textContent='删除'; del.style.marginLeft='8px'; del.onclick = ()=>{ if(confirm('删除此 pending 条目？')){ deletePendingAd(idx); } };
-        actions.appendChild(retry); actions.appendChild(del);
-        div.appendChild(meta); div.appendChild(body); div.appendChild(actions);
-        container.appendChild(div);
-      });
-    }
-
-    async function retryPendingAd(idx){
-      const list = getAdsPending();
-      const it = list[idx]; if(!it) return;
-      try{
-        if(it.op === 'delete' && it.id){
-          const { error } = await supabaseClient.from('advertisements').delete().eq('id', it.id);
-          if(!error){ list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('删除已同步到 Supabase'); return; }
-        } else if(it.op === 'insert' && it.payload){
-          const { data, error } = await supabaseClient.from('advertisements').insert(it.payload).select('id, client_uuid').maybeSingle();
-          if(!error && data && data.id){
-            try{ const current = getAdData(); ['banner','footer'].forEach(section=>{ (current[section]||[]).forEach(a=>{ if(!a.db_id && it.client_uuid && a.client_uuid && a.client_uuid===it.client_uuid){ a.db_id = data.id; } }); }); setAdData(current); }catch(e){console.warn('写回 ads db_id 失败', e);}                
-            list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('插入已同步到 Supabase'); return;
-          }
-        } else if(it.op === 'update' && it.id && it.payload){
-          const { error } = await supabaseClient.from('advertisements').update(it.payload).eq('id', it.id);
-          if(!error){ list.splice(idx,1); setAdsPending(list); renderPendingAds(); notifyFrontendUpdate(); alert('更新已同步到 Supabase'); return; }
-        }
-        alert('重试失败，可能仍然是权限/网络问题');
-      }catch(err){ console.warn('重试 pending 广告失败', err); alert('重试发生错误，请查看控制台'); }
-    }
-
-    async function retryAllPendingAds(){
-      const list = getAdsPending();
-      for(let i=list.length-1;i>=0;i--){ await retryPendingAd(i); }
-    }
-
-    function deletePendingAd(idx){
-      const list = getAdsPending(); list.splice(idx,1); setAdsPending(list); renderPendingAds();
-    }
-
-    // 在适当位置提供一个打开 modal 的按钮（页面顶部或管理面板）
-    (function(){
-      const openBtn = document.createElement('button'); openBtn.textContent='广告 Pending 管理'; openBtn.style.marginLeft='8px';
-      openBtn.onclick = function(){ renderPendingAds(); document.getElementById('ads-pending-modal').style.display='flex'; };
-      // 尝试挂载到 admin 工具栏（如果存在）
-      const toolbar = document.querySelector('#admin-toolbar') || document.body;
-      toolbar.insertBefore(openBtn, toolbar.firstChild);
-    })();
-
-    // ---------- 本地同步开关（仅本地，不写入数据库） ----------
-    (function(){
-      function getLocalOnly(){ return localStorage.getItem('abc_local_only') === '1'; }
-      function setLocalOnly(v){ localStorage.setItem('abc_local_only', v ? '1' : '0'); }
-      const chk = document.createElement('input'); chk.type='checkbox'; chk.id='abc-local-only'; chk.style.marginLeft='12px'; chk.checked = getLocalOnly();
-      const lbl = document.createElement('label'); lbl.htmlFor='abc-local-only'; lbl.textContent='仅本地同步（不写入数据库）'; lbl.style.marginLeft='6px'; lbl.style.color='#555';
-      chk.onchange = function(){ setLocalOnly(chk.checked); alert('仅本地同步已 ' + (chk.checked? '启用' : '禁用') + '（页面将只在本地同步，不写远端 DB）'); };
-      const container = document.querySelector('#admin-toolbar') || document.body;
-      container.insertBefore(chk, container.firstChild);
-      container.insertBefore(lbl, container.firstChild);
-    })();
   </script>
 </body>
 </html> 
