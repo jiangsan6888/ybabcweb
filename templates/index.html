@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Duplicate Finder</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            padding-top: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+        }
+        .upload-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 30px;
+        }
+        .card-body {
+            padding: 40px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .custom-file-label::after {
+            content: "Browse";
+        }
+        h1 {
+            font-weight: 700;
+            margin: 0;
+        }
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+            margin-top: 20px;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            color: #6c757d;
+        }
+        .feature-list li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="upload-card">
+            <div class="card-header text-center">
+                <h1>CSV Duplicate Finder</h1>
+                <p class="mb-0 mt-2">Upload your CSV file to identify duplicate rows</p>
+            </div>
+            <div class="card-body">
+                <form action="/upload" method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="file" class="font-weight-bold">Choose CSV File:</label>
+                        <div class="custom-file">
+                            <input type="file" class="custom-file-input" id="file" name="file" accept=".csv" required>
+                            <label class="custom-file-label" for="file">Select file...</label>
+                        </div>
+                        <small class="form-text text-muted">Maximum file size: 16MB</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg mt-4">
+                        Upload and Process
+                    </button>
+                </form>
+                
+                <ul class="feature-list">
+                    <li>Identifies duplicates across all columns</li>
+                    <li>Displays original and duplicate data</li>
+                    <li>Download duplicates as CSV</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Update file input label with selected filename
+        $('.custom-file-input').on('change', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $(this).next('.custom-file-label').html(fileName);
+        });
+    </script>
+</body>
+</html>
+

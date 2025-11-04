@@ -1,37 +1,102 @@
-# ybabcweb
+# CSV Duplicate Finder
 
-网站游戏集合项目
+A Flask web application that identifies and extracts duplicate rows from CSV files.
 
-## 最新更新
+## Features
 
-### 2024年添加的新游戏
+- 📤 Upload CSV files (up to 16MB)
+- 🔍 Automatically detect duplicate rows based on all columns
+- 📊 View original data and duplicate rows side-by-side
+- 📥 Download identified duplicates as a separate CSV file
+- 🎨 Modern, responsive UI with statistics
 
-1. **俄罗斯方块游戏** (`russia_game/`)
-   - 完整的俄罗斯方块游戏功能
-   - 包含HTML、CSS和JavaScript实现
-   - 支持基本的游戏操作
+## Installation
 
-2. **五子棋游戏** (`gobang_game/`)
-   - 传统五子棋游戏实现
-   - 支持人机对战或双人对战
-   - 美观的界面设计
+1. Install the required dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-3. **开心消消乐游戏** (`happy_match_game/`)
-   - 休闲匹配类游戏
-   - 包含游戏逻辑和UI设计
+## Usage
 
-## 项目结构
+1. Run the Flask application:
+```bash
+python app.py
+```
 
-- 每个游戏都有独立的文件夹
-- 使用HTML、CSS、JavaScript开发
-- 支持直接在浏览器中运行
+2. Open your web browser and navigate to:
+```
+http://localhost:5000
+```
 
-## 使用方法
+3. Upload a CSV file using the web interface
 
-1. 克隆仓库
-2. 直接在浏览器中打开对应游戏的index.html文件
+4. View the results:
+   - Original data table
+   - Duplicate rows table (if any found)
+   - Statistics (total rows, duplicates, unique rows)
 
-## 在线访问（GitHub Pages）
+5. Download the duplicate rows as a CSV file (if duplicates exist)
 
-- 站点地址：`https://jiangsan6888.github.io/ybabcweb/`
-- 如无法访问，请先在仓库 Settings → Pages 启用 Pages，Source 选择 "Deploy from a branch"，Branch 选择 `main`，Folder 选择 `/`。
+## How It Works
+
+### Duplicate Detection
+The application uses pandas' `duplicated(keep=False)` method to identify duplicate rows. This marks ALL occurrences of duplicate rows as True, including the first occurrence. For example:
+
+If your CSV contains:
+```
+Name,Age,City
+John,25,NYC
+Jane,30,LA
+John,25,NYC
+```
+
+The duplicates DataFrame will contain both "John,25,NYC" rows (rows 1 and 3).
+
+### File Storage
+- Uploaded files are processed in memory
+- Duplicate rows are temporarily saved to the `uploads/` folder
+- The filename is stored in the Flask session for download retrieval
+- Files can be cleaned up using the cleanup endpoint (optional)
+
+## Project Structure
+
+```
+.
+├── app.py                 # Main Flask application
+├── requirements.txt       # Python dependencies
+├── README.md             # This file
+├── templates/
+│   ├── index.html        # Upload page
+│   └── results.html      # Results display page
+└── uploads/              # Temporary storage for duplicate CSVs (created automatically)
+```
+
+## Technical Details
+
+- **Framework**: Flask
+- **Data Processing**: pandas
+- **File Handling**: Temporary file storage with session management
+- **UI**: Bootstrap 4 with custom styling
+- **Max File Size**: 16MB (configurable in `app.py`)
+
+## Configuration
+
+You can modify the following settings in `app.py`:
+
+```python
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Maximum upload size
+app.config['UPLOAD_FOLDER'] = 'uploads'               # Temporary storage location
+```
+
+## Security Considerations
+
+- The application generates a random secret key on startup for session management
+- For production use, set a permanent `SECRET_KEY` environment variable
+- Implement file cleanup mechanisms to prevent disk space issues
+- Add user authentication for multi-user environments
+- Validate and sanitize CSV content before processing
+
+## License
+
+This project is open source and available for modification and distribution.
