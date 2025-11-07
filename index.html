@@ -547,8 +547,17 @@
     // 广告管理逻辑
     async function getAdData() {
       if(supabaseClient){
-        const { data, error } = await supabaseClient.from('advertisements').select('*').order('created_at', { ascending: false });
-        if(!error && data && data.length){
+        const result = await queryWithTimeout(async () => {
+          const { data, error } = await supabaseClient
+            .from('advertisements')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100); // 限制最多100条广告
+          if (error) throw error;
+          return data;
+        });
+        if(result && result.length){
+          const data = result;
           const adData = { banner: [], footer: [] };
           data.forEach(ad => {
             const typeVal = ad.ad_type || ad.type; // 兼容两种字段
@@ -1146,17 +1155,57 @@
       };
     }
     
+    // 带超时和重试的查询辅助函数
+    async function queryWithTimeout(queryFn, timeoutMs = 8000, maxRetries = 2) {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), timeoutMs)
+          );
+          const result = await Promise.race([queryFn(), timeoutPromise]);
+          return result;
+        } catch (error) {
+          if (attempt === maxRetries) {
+            console.warn(`查询失败（已重试${maxRetries}次）:`, error.message);
+            return null;
+          }
+          // 等待后重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+      return null;
+    }
+
     async function fetchChatMsgsFromSupabase() {
       if (!supabaseClient) return null;
       if (currentChatMode === 'group') {
-        const { data, error } = await supabaseClient.from('messages').select('*').eq('scope','group').order('created_at', { ascending: true });
-        if (error) { console.warn('获取群聊失败，使用本地:', error.message); return null; }
-        return (data||[]).map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
+        const result = await queryWithTimeout(async () => {
+          const { data, error } = await supabaseClient
+            .from('messages')
+            .select('username,time_text,text,img')
+            .eq('scope','group')
+            .order('created_at', { ascending: true })
+            .limit(500); // 限制最多500条消息
+          if (error) throw error;
+          return data;
+        });
+        if (!result) return null;
+        return result.map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
       } else if (currentPrivateUser) {
         const me = getCurrentUser();
-        const { data, error } = await supabaseClient.from('messages').select('*').eq('scope','private').in('chat_pair',[`${me}|${currentPrivateUser}`,`${currentPrivateUser}|${me}`]).order('created_at',{ascending:true});
-        if (error) { console.warn('获取私聊失败，使用本地:', error.message); return null; }
-        return (data||[]).map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
+        const result = await queryWithTimeout(async () => {
+          const { data, error } = await supabaseClient
+            .from('messages')
+            .select('username,time_text,text,img')
+            .eq('scope','private')
+            .in('chat_pair',[`${me}|${currentPrivateUser}`,`${currentPrivateUser}|${me}`])
+            .order('created_at',{ascending:true})
+            .limit(500);
+          if (error) throw error;
+          return data;
+        });
+        if (!result) return null;
+        return result.map(m=>({ user:m.username, time:m.time_text, text:m.text, img:m.img }));
       }
       return [];
     }
@@ -1740,10 +1789,18 @@
     // 通知弹窗逻辑 - 从Supabase实时读取
     async function getNotices() {
       if(supabaseClient){
-        const { data, error } = await supabaseClient.from('notices').select('*').order('created_at', { ascending: false });
-        if(!error && data && data.length){
+        const result = await queryWithTimeout(async () => {
+          const { data, error } = await supabaseClient
+            .from('notices')
+            .select('content,img,time,created_at')
+            .order('created_at', { ascending: false })
+            .limit(100); // 限制最多100条通知
+          if (error) throw error;
+          return data;
+        });
+        if(result && result.length){
           // 兼容数据库字段和本地字段
-          return data.map(d=>({
+          return result.map(d=>({
             text: d.content||'',
             img: d.img||'',
             time: d.time || (d.created_at ? d.created_at.replace('T',' ').split('.')[0] : '')
